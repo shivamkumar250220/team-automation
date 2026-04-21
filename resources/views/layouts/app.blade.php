@@ -228,23 +228,7 @@
                         </a>
                         
                         {{-- Ranking Check --}}
-                        <li class="nav-item {{ request()->routeIs('forms.*') ? 'active' : '' }}">
-                            <a class="nav-link" data-bs-toggle="collapse" href="#seo-menu" aria-expanded="{{ request()->routeIs('forms.*') ? 'true' : 'false' }}">
-                                <span class="menu-title">SEO Automation</span>
-                                <i class="menu-arrow"></i>
-                                <i class="mdi mdi-format-list-bulleted-square menu-icon"></i>
-                            </a>
-                            <div class="collapse {{ request()->routeIs('forms.*') ? 'show' : '' }}" id="seo-menu">
-                                <ul class="nav flex-column sub-menu">
-                                    <li class="nav-item">
-                                        <a class="nav-link" href="{{ route('ranking.report') }}">Ranking Report</a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a class="nav-link" href="#">Advanced Forms</a>
-                                    </li>
-                                </ul>
-                            </div>
-                        </li>
+                        
 
                         <div class="collapse {{ request()->routeIs('clients.*') ? 'show' : '' }}" id="clients-menu">
                             <ul class="nav flex-column sub-menu">
@@ -264,6 +248,23 @@
                             </ul>
                         </div>
                     </li>
+                    <li class="nav-item {{ request()->routeIs('forms.*') ? 'active' : '' }}">
+                            <a class="nav-link" data-bs-toggle="collapse" href="#seo-menu" aria-expanded="{{ request()->routeIs('forms.*') ? 'true' : 'false' }}">
+                                <span class="menu-title">SEO Automation</span>
+                                <i class="menu-arrow"></i>
+                                <i class="mdi mdi-format-list-bulleted-square menu-icon"></i>
+                            </a>
+                            <div class="collapse {{ request()->routeIs('forms.*') ? 'show' : '' }}" id="seo-menu">
+                                <ul class="nav flex-column sub-menu">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ route('ranking.report') }}">Ranking Report</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#">Advanced Forms</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
 
                     {{-- Forms --}}
                     <li class="nav-item {{ request()->routeIs('forms.*') ? 'active' : '' }}">
