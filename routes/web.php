@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\DomainManagementController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\SEOAutomationController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,11 +12,27 @@ Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
 
 Route::middleware(['auth', 'session.valid'])->group(function () {
 
-    Route::get('/dashboard', [AuthController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [HomeController::class, 'index'])->name('dashboard');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-    Route::resource('clients', ClientController::class);
-    Route::get('/clients/data', [ClientController::class, 'data'])->name('clients.data');
+    //Clients
+    Route::get('/clients', [DomainManagementController::class, 'index'])->name('clients');
+    Route::get('/add-client',  [DomainManagementController::class, 'create'])->name('add-client');
+    Route::post('/add-client',  [DomainManagementController::class, 'store'])->name('store-client');
+    Route::get('/view-client/{id}',  [DomainManagementController::class, 'show'])->name('view-client');
+    Route::get('/edit-client/{id}',  [DomainManagementController::class, 'edit'])->name('edit-client');
+    Route::post('/edit-client',  [DomainManagementController::class, 'update'])->name('update-client');
+
+    //Clients Properties
+    Route::get('/clients-properties/{id}',  [DomainManagementController::class, 'showproperties'])->name('clients-properties');
+    Route::get('/add-client-properties/{id}',  [DomainManagementController::class, 'createproperties'])->name('add-client-properties');
+    Route::post('/add-client-properties',  [DomainManagementController::class, 'storeproperties'])->name('store-client-properties');
+    Route::get('/edit-client-properties/{id}',  [DomainManagementController::class, 'editproperties'])->name('edit-client-properties');
+    Route::post('/edit-client-properties',  [DomainManagementController::class, 'updateproperties'])->name('update-client-properties');
+
+
+    // Route::resource('clients', ClientController::class);
+    // Route::get('/clients/data', [ClientController::class, 'data'])->name('clients.data');
 
     // Forms
     Route::prefix('forms')->name('forms.')->group(function () {
@@ -31,6 +49,10 @@ Route::middleware(['auth', 'session.valid'])->group(function () {
     // Seo Automation
     // Route::prefix('arihant')->name('arihant.')->group(function () {
     //     });
-    Route::get('/ranking-report', [SEOAutomationController::class, 'rankingReport'])->name('ranking.report');
-    Route::post('/ranking-report', [SEOAutomationController::class, 'rankingReportform'])->name('ranking.report.form');
+    Route::get('/ranking-competitor-report/{dmid}/{cpid}', [SEOAutomationController::class, 'rankingCompetitorReport'])->name('ranking.competitor.report');
+    Route::post('/ranking-competitor-report/{dmid}/{cpid}', [SEOAutomationController::class, 'rankingCompetitorReportForm'])->name('ranking.competitor.report.form');
+    Route::post('/ranking-competitor-report/save',[SEOAutomationController::class, 'saveRankingCompetitorReport'])->name('ranking.competitor.report.save');
+    
+    Route::get('/core-web-vitals/{dmid}/{cpid}', [SEOAutomationController::class, 'coreWebVitals'])->name('core.web.vitals');
+    Route::post('/core-web-vitals/{dmid}/{cpid}', [SEOAutomationController::class, 'coreWebVitalsform'])->name('core.web.vitals.form');
 });

@@ -2,164 +2,131 @@
 
 @section('title', 'Add Client')
 @section('page_header', 'Add Client')
-@section('page_icon', 'mdi mdi-account-plus')
+@section('page_icon', 'mdi mdi-account-multiple')
 
 @section('breadcrumb')
-    <li class="breadcrumb-item"><a href="{{ route('clients.index') }}">Clients</a></li>
+    <li class="breadcrumb-item"><a href="{{route('clients')}}">Clients</a></li>
     <li class="breadcrumb-item active">Add Client</li>
 @endsection
 
-@section('content')
+@push('styles')
+<link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+@endpush
 
-<form action="{{ route('clients.store') }}" method="POST" autocomplete="off">
-    @csrf
+@section("content")
 
-    <div class="row g-3">
-
-        <div class="col-12">
-            <div class="card mb-0">
-                <div class="card-body">
-                    <h6 class="card-title mb-1">Basic Information</h6>
-                    <p class="card-subtitle mb-4">Client contact details</p>
-
-                    <div class="row g-3">
-
-                        <div class="col-md-4">
-                            <label class="form-label">Name <span class="text-danger">*</span></label>
-                            <input type="text" name="name"
-                                   class="form-control @error('name') is-invalid @enderror"
-                                   value="{{ old('name') }}" placeholder="e.g. Delhi Laser Clinic">
-                            @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-
-                        <div class="col-md-4">
-                            <label class="form-label">Phone <span class="text-danger">*</span></label>
-                            <input type="text" name="phone"
-                                   class="form-control @error('phone') is-invalid @enderror"
-                                   value="{{ old('phone') }}" placeholder="+91 98765 43210">
-                            @error('phone')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-
-                        <div class="col-md-4">
-                            <label class="form-label">Email <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="mdi mdi-at"></i></span>
-                                <input type="email" name="email"
-                                       class="form-control @error('email') is-invalid @enderror"
-                                       value="{{ old('email') }}" placeholder="clinic@example.com">
-                                @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                        </div>
-
-                        <div class="col-md-8">
-                            <label class="form-label">
-                                Slug <span class="text-danger">*</span>
-                                <small class="text-muted fw-normal ms-1">(same as used in LMS)</small>
-                            </label>
-                            <input type="text" name="slug"
-                                   class="form-control @error('slug') is-invalid @enderror"
-                                   value="{{ old('slug') }}" placeholder="e.g. delhi-laser-clinic">
-                            @error('slug')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-12">
-            <div class="card mb-0">
-                <div class="card-body">
-                    <h6 class="card-title mb-1">Business Details</h6>
-                    <p class="card-subtitle mb-4">Industry, location and assignment</p>
-
-                    <div class="row g-3">
-
-                        <div class="col-md-4">
-                            <label class="form-label">Industry <span class="text-danger">*</span></label>
-                            <select name="industry" class="form-select @error('industry') is-invalid @enderror">
-                                <option value="" disabled {{ old('industry') ? '' : 'selected' }}>Choose…</option>
-                                <option value="dermatologist" {{ old('industry') == 'dermatologist' ? 'selected' : '' }}>Dermatologist</option>
-                                <option value="ivf"           {{ old('industry') == 'ivf'           ? 'selected' : '' }}>IVF</option>
-                                <option value="other"         {{ old('industry') == 'other'         ? 'selected' : '' }}>Other</option>
-                            </select>
-                            @error('industry')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-
-                        <div class="col-md-4">
-                            <label class="form-label">City</label>
-                            <select name="city" class="form-select @error('city') is-invalid @enderror">
-                                <option value="">— Select city —</option>
-                                @foreach(['Delhi','Mumbai','Bangalore','Chennai','Hyderabad','Pune','Other'] as $city)
-                                    <option value="{{ $city }}" {{ old('city') == $city ? 'selected' : '' }}>{{ $city }}</option>
-                                @endforeach
-                            </select>
-                            @error('city')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-
-                        <div class="col-md-4">
-                            <label class="form-label">Zip</label>
-                            <input type="text" name="zip"
-                                   class="form-control @error('zip') is-invalid @enderror"
-                                   value="{{ old('zip') }}" placeholder="110001">
-                            @error('zip')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-
-                        <div class="col-md-4">
-                            <label class="form-label">
-                                Assigned User <span class="text-danger">*</span>
-                                <small class="text-muted fw-normal ms-1">(team auto-assigned)</small>
-                            </label>
-                            <select name="user_id" class="form-select @error('user_id') is-invalid @enderror">
-                                <option value="" disabled {{ old('user_id') ? '' : 'selected' }}>Select user…</option>
-                                @foreach($users as $user)
-                                    <option value="{{ $user->id }}" {{ old('user_id') == $user->id ? 'selected' : '' }}>
-                                        {{ $user->name }}
-                                        @if($user->team) — {{ $user->team->name }} @endif
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('user_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card mb-0 h-100">
-                <div class="card-body">
-                    <h6 class="card-title mb-1">Status</h6>
-                    <p class="card-subtitle mb-3">Account availability</p>
-                    <div class="d-flex gap-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="status" id="status_active"
-                                   value="active" {{ old('status', 'active') == 'active' ? 'checked' : '' }}>
-                            <label class="form-check-label fw-medium" for="status_active">Active</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="status" id="status_inactive"
-                                   value="inactive" {{ old('status') == 'inactive' ? 'checked' : '' }}>
-                            <label class="form-check-label fw-medium" for="status_inactive">Inactive</label>
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="live-preview">
+                            <form class="row g-3" method="post" action="{{url('add-client')}}">
+                                @csrf
+                                <div class="col-md-4">
+                                    <label for="validationDefault01" class="form-label">Name*</label>
+                                    <input type="text" name="name" class="form-control" id="validationDefault01" value="" required="">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefault02" class="form-label">Phone*</label>
+                                    <input type="text" name="phone" class="form-control" id="validationDefault02" value="" required="">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefaultUsername" class="form-label">Email*</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text" id="inputGroupPrepend2">@</span>
+                                        <input type="text" name="email" class="form-control" id="validationDefaultUsername" aria-describedby="inputGroupPrepend2" required="">
+                                    </div>
+                                </div>
+                                <div class="col-md-12">
+                                    <label for="validationDefault02" class="form-label">Slug <strong>(*Provide slug same as used in LMS for)</strong></label>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <label for="customer_id" class="form-label">Customer ID*</label>
+                                    <input type="text" name="customer_id" class="form-control" id="customer_id" value="" required="">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="manager_id" class="form-label">Manager ID*</label>
+                                    <input type="text" name="manager_id" class="form-control" id="manager_id" value="" required="">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefault01" class="form-label">Appointment Scheduled*</label>
+                                    <input type="text" name="scheduled" class="form-control" id="validationDefault01" value="" required="">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefault01" class="form-label">Appointment Visited*</label>
+                                    <input type="text" name="visited" class="form-control" id="validationDefault01" value="" required="">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefault01" class="form-label">Appointment Missed*</label>
+                                    <input type="text" name="missed" class="form-control" id="validationDefault01" value="" required="">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefault01" class="form-label">Interested*</label>
+                                    <input type="text" name="interested" class="form-control" id="validationDefault01" value="" required="">
+                                </div>
+                  
+                                <div class="col-md-4">
+                                    <label for="validationDefault04" class="form-label">Industry*</label>
+                                    <select class="form-select" name="industry" id="validationDefault04" required="">
+                                        <option selected="" disabled="" value="">Choose...</option>
+                                        <option value="ivf">IVF</option>
+                                        <option value="hair">Hair Transplant</option>
+                                        <option value="dental">Dental</option>
+                                        <option value="dermatologist">Dermatologist</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefault05" class="form-label">City*</label>
+                                    <select class="form-select" name="city" id="validationDefault05" required="">
+                                        <option selected="" disabled="" value="">Choose...</option>
+                                        <option value="delhi">Delhi</option>
+                                        <option value="gurugram">Gurugram</option>
+                                        <option value="noida">Noida</option>
+                                        <option value="mumbai">Mumbai</option>
+                                        <option value="bangalore">Bangalore</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefault05" class="form-label">Zip*</label>
+                                    <input type="text" name="zip" class="form-control" id="validationDefault05" required="">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefault02" class="form-label">Password*</label>
+                                    <input type="password" id="password" name="password" class="form-control" value="" required="">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefault05" class="form-label">Status</label>
+                                    <div class="form-check">
+                                        <input type="radio" value="active" class="form-check-input" checked="checked" id="validationFormCheck2" name="status">
+                                        <label class="form-check-label" for="validationFormCheck2">Active</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input type="radio" value="inactive" class="form-check-input" id="validationFormCheck3" name="status">
+                                        <label class="form-check-label" for="validationFormCheck3">InActive</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="validationDefault05" class="form-label">Type</label>
+                                    <div class="form-check">
+                                        <input type="radio" value="Admin" class="form-check-input" checked="checked" id="validationFormCheck2" name="type">
+                                        <label class="form-check-label" for="validationFormCheck2">Admin</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input type="radio" value="SA" class="form-check-input" id="validationFormCheck3" name="type">
+                                        <label class="form-check-label" for="validationFormCheck3">Super Admin</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <button class="btn btn-primary" type="submit">Submit</button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> <!-- end col -->
         </div>
-
-        <div class="col-12">
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary">
-                    <i class="mdi mdi-check me-1"></i> Create Client
-                </button>
-                <a href="{{ route('clients.index') }}" class="btn btn-light">
-                    <i class="mdi mdi-arrow-left me-1"></i> Back
-                </a>
-            </div>
-        </div>
-
-    </div>
-</form>
-
 @endsection

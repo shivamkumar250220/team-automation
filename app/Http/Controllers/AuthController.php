@@ -28,10 +28,8 @@ class AuthController extends Controller
             'email'    => 'required|email',
             'password' => 'required|string',
         ]);
-
-        $user = User::with(['role', 'team'])
-                    ->where('email', $request->email)
-                    ->first();
+        
+        $user = User::where('email', $request->email)->first();
 
         if (! $user) {
             return back()->withErrors(['email' => 'Invalid email or password.'])->withInput();
@@ -49,20 +47,21 @@ class AuthController extends Controller
             return back()->withErrors(['email' => 'Invalid email or password.'])->withInput();
         }
 
-        if (! $user->is_active) {
-            return back()->withErrors(['email' => 'Your account is disabled.'])->withInput();
-        }
+        // if (! $user->is_active) {
+        //     return back()->withErrors(['email' => 'Your account is disabled.'])->withInput();
+        // }
 
-        if (! $user->role || ! $user->role->is_active) {
-            return back()->withErrors(['email' => 'Your role is inactive.'])->withInput();
-        }
+        // if (! $user->role || ! $user->role->is_active) {
+        //     return back()->withErrors(['email' => 'Your role is inactive.'])->withInput();
+        // }
 
-        if ($user->team_id && (! $user->team || ! $user->team->is_active)) {
-            return back()->withErrors(['email' => 'Your team is inactive.'])->withInput();
-        }
+        // if ($user->team_id && (! $user->team || ! $user->team->is_active)) {
+        //     return back()->withErrors(['email' => 'Your team is inactive.'])->withInput();
+        // }
 
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
+        // dd($user);
 
         return redirect()->intended(route('dashboard'));
     }

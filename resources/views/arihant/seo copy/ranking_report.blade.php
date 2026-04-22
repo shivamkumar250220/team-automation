@@ -7,13 +7,44 @@
 @section('breadcrumb')
     <li class="breadcrumb-item active">SEO</li>
     <li class="breadcrumb-item active" aria-current="page">Ranking Report</li>
+    
 @endsection
 
+@push('styles')
+<!-- <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet"> -->
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<style>
+    .keyword-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: 4px;
+    }
+    .position-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        font-weight: 700;
+        font-size: 0.8rem;
+    }
+    .pos-top3 { background: #d1fae5; color: #065f46; }
+    .pos-top10 { background: #dbeafe; color: #1e40af; }
+    .pos-other { background: #f3f4f6; color: #6b7280; }
+    .result-link { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .competitor-tag { background: #fef3c7; color: #92400e; }
+    #keywordTabs .nav-link { font-size: 0.85rem; }
+    .dataTables_wrapper .dataTables_filter input { border-radius: 6px; border: 1px solid #dee2e6; padding: 4px 10px; }
+</style>
+@endpush
 @section('content')
 
 <div class="row g-4">
-
-    {{-- Ranking Report Auto-pull Card --}}
     <div class="col-12">
         <div class="card">
             <div class="card-body">
@@ -50,7 +81,7 @@
                             <div class="form-group">
                                 <label class="form-label">Our Client <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" id="ourclientInput" name="ourclient"
-                                    placeholder="Enter the Client domain" required>
+                                    placeholder="Enter the Client domain" value="{{$domain}}" required>
                                 <div class="invalid-feedback">Please enter the client domain.</div>
                             </div>
                         </div>
@@ -155,37 +186,6 @@
 
 @endsection
 
-@push('styles')
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
-<style>
-    .keyword-badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        margin-right: 4px;
-    }
-    .position-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        font-weight: 700;
-        font-size: 0.8rem;
-    }
-    .pos-top3 { background: #d1fae5; color: #065f46; }
-    .pos-top10 { background: #dbeafe; color: #1e40af; }
-    .pos-other { background: #f3f4f6; color: #6b7280; }
-    .result-link { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .competitor-tag { background: #fef3c7; color: #92400e; }
-    #keywordTabs .nav-link { font-size: 0.85rem; }
-    .dataTables_wrapper .dataTables_filter input { border-radius: 6px; border: 1px solid #dee2e6; padding: 4px 10px; }
-</style>
-@endpush
-
 @push('scripts')
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
@@ -253,7 +253,7 @@ document.getElementById('rankingReportForm').addEventListener('submit', async fu
     try {
         // Fire one request per keyword
         const promises = keywordList.map(kw =>
-            fetch('{{ route("ranking.report.form") }}', {
+            fetch('{{ route("ranking.competitor.report.form",[$domainmanagement_id, $client_property_id]) }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

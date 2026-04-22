@@ -1,11 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'Client List')
-@section('page_header', 'Client List')
+@section('title', 'Client Properties')
+@section('page_header', 'Client Properties')
 @section('page_icon', 'mdi mdi-account-multiple')
 
 @section('breadcrumb')
-    <li class="breadcrumb-item active">Clients</li>
+    <li class="breadcrumb-item"><a href="{{url('/')}}">Dashboard</a></li>
+    <li class="breadcrumb-item active">Clients Properties</li>
 @endsection
 
 @push('styles')
@@ -13,42 +14,40 @@
 <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
 @endpush
 
-@section('content')
+@section("content")
 
-<div class="row">
+        <div class="row">
             <div class="col-lg-12">
                 <div class="card">
                     <div class="card-header">
-                        <a href="{{route('add-client')}}" class="btn btn-success">Add Client</a>
+                        <a href="{{route('add-client-properties',$client[0]->id)}}" class="btn btn-success">Add Property</a>
                     </div>
                     <div class="card-body">
                         <table id="scroll-horizontal" class="table nowrap align-middle" style="width:100%">
                             <thead>
                                 <tr>
                                     <th scope="col">ID</th>
-                                    <th scope="col">Client</th>
-                                    <th scope="col">Industry</th>
-                                    <th scope="col">Status</th>
+                                    <th scope="col">Property</th>
+                                    <th scope="col">Domain</th>
                                     <th scope="col">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
 
-                                <?php if($clients->isNotEmpty()){ ?>
-                                    <?php foreach($clients as $key => $client){ ?>
+                                <?php if($client_data->isNotEmpty()){ ?>
+                                    <?php foreach($client_data as $key => $data){ ?>
                                         <tr>
                                             <td class="fw-medium">{{$key+1}}</td>
-                                            <td>{{$client->name}}</td>
-                                            <td>{{$client->industry}}</td>
-                                            <td>{{$client->status}}</td>
+                                            <td>{{$data->type}}</td>
+                                            <td>{{$data->domain}}</td>
                                             <td>
                                                 <div class="dropdown d-inline-block">
-                                                    <button class="btn btn-secondary btn-sm dropdown" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <button class="btn btn-soft-secondary btn-sm dropdown" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                                         <i class="ri-more-fill align-middle"></i>
                                                     </button>
                                                     <ul class="dropdown-menu dropdown-menu-end">
-                                                        <li><a href="{{url('edit-client/'.$client->id)}}" class="dropdown-item"><i class="mdi_icon mdi mdi-pencil-box-multiple text-muted"></i> Edit</a> </li>
-                                                        <li><a href="{{url('clients-properties/'.$client->id)}}" class="dropdown-item"><i class="mdi_icon mdi mdi-delete-circle-outline text-muted"></i> Properties</a></li>
+                                                        <li><a href="{{url('edit-client-properties/'.$data->id)}}" class="dropdown-item"><i class="mdi_icon mdi mdi-pencil-box-multiple text-muted"></i> Edit</a> </li>
+                                                        <li><a href="{{url('clientsroute/'.$data->id.'/'.$data->domainmanagement_id)}}" class="dropdown-item"><i class="mdi_icon mdi mdi-pencil-box-multiple text-muted"></i> Routes</a> </li>
                                                     </ul>
                                                 </div>
                                             </td>

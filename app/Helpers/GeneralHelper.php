@@ -1,6 +1,8 @@
 <?php
 namespace App\Helpers;
 
+use App\Models\Client_propertiesModel;
+
 class GeneralHelper
 {
     public static function getaioResult($page_token, $engine = 'google_ai_overview')
@@ -19,6 +21,12 @@ class GeneralHelper
         } catch (\Throwable $ex) {
             return json_encode(['error' => $ex->getMessage()]);
         }
+    }
+
+    public static function getDomainByClientPropertyId($client_property_id)
+    {
+        $clientProperty = Client_propertiesModel::find($client_property_id);
+        return $clientProperty ? $clientProperty->domain : null;
     }
 
     /**

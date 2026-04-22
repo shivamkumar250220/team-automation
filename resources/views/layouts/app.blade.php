@@ -217,69 +217,30 @@
                             <i class="mdi mdi-view-dashboard-outline menu-icon"></i>
                         </a>
                     </li>
-
-                    {{-- Manage Clients --}}
-                    <li class="nav-item {{ request()->routeIs('clients.*') ? 'active' : '' }}">
-                        <a class="nav-link" data-bs-toggle="collapse" href="#clients-menu"
-                            aria-expanded="{{ request()->routeIs('clients.*') ? 'true' : 'false' }}">
-                            <span class="menu-title">Manage Clients</span>
-                            <i class="menu-arrow"></i>
-                            <i class="mdi mdi-account-multiple menu-icon"></i>
-                        </a>
-                        
-                        {{-- Ranking Check --}}
-                        
-
-                        <div class="collapse {{ request()->routeIs('clients.*') ? 'show' : '' }}" id="clients-menu">
-                            <ul class="nav flex-column sub-menu">
-                                <li class="nav-item">
-                                    <a class="nav-link {{ request()->routeIs('clients.index') ? 'active' : '' }}"
-                                        href="{{ route('clients.index') }}">
-                                        All Clients
-                                    </a>
-                                </li>
-
-                                <li class="nav-item">
-                                    <a class="nav-link {{ request()->routeIs('clients.create') ? 'active' : '' }}"
-                                        href="{{ route('clients.create') }}">
-                                        Add Client
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </li>
-                    <li class="nav-item {{ request()->routeIs('forms.*') ? 'active' : '' }}">
-                            <a class="nav-link" data-bs-toggle="collapse" href="#seo-menu" aria-expanded="{{ request()->routeIs('forms.*') ? 'true' : 'false' }}">
-                                <span class="menu-title">SEO Automation</span>
-                                <i class="menu-arrow"></i>
-                                <i class="mdi mdi-format-list-bulleted-square menu-icon"></i>
-                            </a>
-                            <div class="collapse {{ request()->routeIs('forms.*') ? 'show' : '' }}" id="seo-menu">
-                                <ul class="nav flex-column sub-menu">
-                                    <li class="nav-item">
-                                        <a class="nav-link" href="{{ route('ranking.report') }}">Ranking Report</a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a class="nav-link" href="#">Advanced Forms</a>
-                                    </li>
-                                </ul>
-                            </div>
-                        </li>
-
-                    {{-- Forms --}}
-                    <li class="nav-item {{ request()->routeIs('forms.*') ? 'active' : '' }}">
-                        <a class="nav-link" data-bs-toggle="collapse" href="#forms-menu" aria-expanded="{{ request()->routeIs('forms.*') ? 'true' : 'false' }}">
-                            <span class="menu-title">Forms</span>
+                    
+                    <li class="nav-item {{ !request()->routeIs('dashboard') ? 'active' : '' }}">
+                        <a class="nav-link" data-bs-toggle="collapse" href="#clients-menu">
+                            @if(Auth::user()->role->name == "Admin")
+                                <span class="menu-title">Manage Clients</span>
+                            @else
+                                <span class="menu-title">Manage Details</span>
+                            @endif
                             <i class="menu-arrow"></i>
                             <i class="mdi mdi-format-list-bulleted-square menu-icon"></i>
                         </a>
-                        <div class="collapse {{ request()->routeIs('forms.*') ? 'show' : '' }}" id="forms-menu">
+                        <div class="collapse {{ !request()->routeIs('dashboard') ? 'show' : '' }}" id="clients-menu">
                             <ul class="nav flex-column sub-menu">
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{{ route('forms.basic') }}">Basic Forms</a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="#">Advanced Forms</a>
+
+                                    @if(Auth::user()->role->name == "Admin")
+                                        <div class="collapse menu-dropdown show" id="sidebarDashboards">
+                                            <ul class="nav nav-sm flex-column">
+                                                <li class="nav-item">
+                                                    <a href="{{url('clients')}}" class="nav-link {{ Request::is('clients') ? 'active' : '' }}" data-key="t-analytics">Clients</a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    @endif
                                 </li>
                             </ul>
                         </div>
