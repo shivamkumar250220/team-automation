@@ -238,6 +238,9 @@
                                                 <li class="nav-item">
                                                     <a href="{{url('clients')}}" class="nav-link {{ Request::is('clients') ? 'active' : '' }}" data-key="t-analytics">Clients</a>
                                                 </li>
+                                                <li class="nav-item">
+                                                    <a href="{{url('industry')}}" class="nav-link {{ Request::is('industry') ? 'active' : '' }}" data-key="t-analytics">Industry</a>
+                                                </li>
                                             </ul>
                                         </div>
                                     @endif
@@ -245,6 +248,8 @@
                             </ul>
                         </div>
                     </li>
+
+                    
 
                 </ul>
             </nav>

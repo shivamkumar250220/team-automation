@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Client;
 use App\Models\Client_landing_page_urlModel;
 use Illuminate\Http\Request;
 use App\Models\DomainManagementModel;
 use App\Models\Client_propertiesModel;
+use App\Models\Industry;
 use App\Models\User;
 use App\Services\GoogleSearchConsoleService;
 use Illuminate\Support\Facades\Hash;
@@ -37,7 +39,9 @@ class DomainManagementController extends Controller
      */
     public function create()
     {
-        return view("clients.create");
+        $industry = Industry::orderBy('name')
+                     ->get();
+        return view("clients.create", compact("industry"));
     }
 
     /**
@@ -54,31 +58,13 @@ class DomainManagementController extends Controller
         $client->phone = $data["phone"];
         $client->email = $data["email"];
         $client->industry = $data["industry"];
-        $client->customer_id = $data['customer_id'];
-        $client->manager_id = $data['manager_id'];
-        $scheduledSlug = '"' . str_replace(',', '","', $data["scheduled"]) . '"';
-        $client->scheduled_slug = $scheduledSlug;
-        $visitedSlug = '"' . str_replace(',', '","', $data["visited"]) . '"';
-        $client->visited_slug = $visitedSlug;
-        $missedSlug = '"' . str_replace(',', '","', $data["missed"]) . '"';
-        $client->missed_slug = $missedSlug;
-        $interestedSlug = '"' . str_replace(',', '","', $data["interested"]) . '"';
-        $client->interested_slug = $interestedSlug;
         $client->city = $data["city"];
         $client->zip = $data["zip"];
         $client->status = $data["status"];
         $client->save();
 
-        $user = new User;
-        $user->name = $data["name"];
-        $user->email = $data["email"];
-        $user->type = $data["type"];
-        $user->password = Hash::make($request->password); // Hashing password
-        $user->domainmanagement_id = $client->id;
-        $user->save();
 
-
-        if ($client->save() && $user->save()) {
+        if ($client->save()) {
 
             // $statusController = new StatusController();
             // $data = "New Client Added - " . $client->name;
@@ -96,10 +82,12 @@ class DomainManagementController extends Controller
      */
     public function show(string $id)
     {
+        
         unset($_SESSION['lms_client_check']);
-        $client_data = DomainManagementModel::with('Client_properties')->where("id", $id)->get();
-        $dmid = $id;
-        return view("clients.show", compact("client_data", "dmid"));
+        $client_data = Client_propertiesModel::where("user_id", $id)->get();
+        // dd($client_data);
+        $user_id = $id;
+        return view("clients.show", compact("client_data", "user_id"));
     }
 
     /**
@@ -108,23 +96,12 @@ class DomainManagementController extends Controller
     public function edit(string $id)
     {
         $data = DomainManagementModel::find($id);
-        dd($id, $data);
+        // dd($id, $data);
         $data1 = User::where('domainmanagement_id',$id)->first();
-
-        $s1 = trim($data->scheduled_slug, '"');
-        $scheduled_slug = str_replace('","', ',', $s1);
-
-        $s1 = trim($data->visited_slug, '"');
-        $visited_slug = str_replace('","', ',', $s1);
-
-        $s1 = trim($data->missed_slug, '"');
-        $missed_slug = str_replace('","', ',', $s1);
-
-        $s1 = trim($data->interested_slug, '"');
-        $interested_slug = str_replace('","', ',', $s1);
+        $industry_data = Industry::get();
 
         // dd($id);
-        return view("clients.edit", compact("data","data1","scheduled_slug","visited_slug","missed_slug","interested_slug"));
+        return view("clients.edit", compact("data","data1","industry_data"));
     }
 
     /**

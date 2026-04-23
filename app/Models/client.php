@@ -27,6 +27,10 @@ class Client extends Model
     {
         return $this->belongsTo(User::class);
     }
+    public function client_properties()
+    {
+        return $this->hasMany(Client_propertiesModel::class, 'user_id'); // assuming 'client_id' is the foreign key in the budget table
+    }
 
     public function team()
     {

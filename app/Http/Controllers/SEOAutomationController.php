@@ -19,7 +19,7 @@ class SEOAutomationController extends Controller
         //
     }
 
-    public function rankingCompetitorReport($domainmanagement_id, $client_property_id)
+    public function rankingCompetitorReport($created_by_user_id, $client_property_id)
     {
         $domain = GeneralHelper::getDomainByClientPropertyId($client_property_id);
 
@@ -27,7 +27,7 @@ class SEOAutomationController extends Controller
 
         // Admin / Manager  → all their reports across every client
         // Everyone else    → only reports for this specific client_property_id
-        $query = RankingCompetitorReport::where('user_id', $user->id)
+        $query = RankingCompetitorReport::where('created_by_user_id', $created_by_user_id)
                                         ->orderBy('created_at', 'desc');
 
         if (!in_array(optional($user->role)->name, ['admin', 'manager'])) {
@@ -46,13 +46,12 @@ class SEOAutomationController extends Controller
 
         return view(
             'arihant.seo.ranking_competitor_report',
-            compact('domainmanagement_id', 'client_property_id', 'domain', 'savedReports')
+            compact('created_by_user_id', 'client_property_id', 'domain', 'savedReports')
         );
     }
 
     public function rankingCompetitorReportForm(Request $request)
     {
-        // dd($request->all());
         $request->validate([
             'keyword'  => 'required|string|max:255',
             'location' => 'required|string',
@@ -63,6 +62,7 @@ class SEOAutomationController extends Controller
     
         // Pass location into the helper (you may extend GeneralHelper to accept it)
         $searchJson = GeneralHelper::getSearchResult($keyword, 'google', $location);
+        // dd($searchJson);
         $searchData = json_decode($searchJson, true);
     
         if (!$searchData || isset($searchData['error'])) {
@@ -79,7 +79,7 @@ class SEOAutomationController extends Controller
     public function saveRankingCompetitorReport(Request $request)
     {
         $request->validate([
-            'domainmanagement_id' => 'required|integer',
+            'created_by_user_id' => 'required|integer',
             'client_property_id'  => 'required|integer',
             'location'            => 'required|string|max:100',
             'keywords'            => 'required|array|min:1',
@@ -90,7 +90,7 @@ class SEOAutomationController extends Controller
         ]);
 
         $report = RankingCompetitorReport::create([
-            'domainmanagement_id' => $request->domainmanagement_id,
+            'created_by_user_id' => $request->created_by_user_id,
             'client_property_id'  => $request->client_property_id,
             'user_id'             => auth()->id(),
             'location'            => $request->location,
@@ -116,24 +116,24 @@ class SEOAutomationController extends Controller
     }
 
     
-    public function coreWebVitals($domainmanagement_id, $client_property_id)
+    public function coreWebVitals($created_by_user_id, $client_property_id)
     {
         $domain = GeneralHelper::getDomainByClientPropertyId($client_property_id);
         // dd(Auth::user()->id);
-        $query = CoreWebVital::where('domainmanagement_id', $domainmanagement_id)
+        $query = CoreWebVital::where('created_by_user_id', $created_by_user_id)
             ->where('client_property_id', $client_property_id)
             ->orderByDesc('created_at');
     
         // Admin / Manager see all records; everyone else sees only their own
         if (! Auth::user()->role->name == 'admin' && ! Auth::user()->role->name == 'manager') {
-            $query->where('user_id', Auth::user()->id);
+            $query->where('created_by_user_id', $created_by_user_id);
         }
     
         $savedResults = $query->get();
     
         return view(
             'arihant.seo.core_web_vitals',
-            compact('domainmanagement_id', 'client_property_id', 'domain', 'savedResults')
+            compact('created_by_user_id', 'client_property_id', 'domain', 'savedResults')
         );
     }
 
@@ -141,7 +141,7 @@ class SEOAutomationController extends Controller
     {
         $request->validate([
             'ourclient'              => 'required|url',
-            'domainmanagement_id'    => 'required|integer',
+            'created_by_user_id' => 'required|integer',
             'client_property_id'     => 'required|integer',
         ]);
 
@@ -193,9 +193,9 @@ class SEOAutomationController extends Controller
 
         // ── Build flat DB row from both strategies ──────────────────────
         $row = [
-            'domainmanagement_id' => $request->input('domainmanagement_id'),
+            'created_by_user_id' => $request->input('created_by_user_id'),
             'client_property_id'  => $request->input('client_property_id'),
-            'user_id'             => Auth::user()->id,
+            'user_id' => auth()->id(),
             'url'                 => $url,
         ];
 

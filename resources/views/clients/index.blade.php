@@ -10,60 +10,74 @@
 
 @push('styles')
 <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
 @endpush
 
 @section('content')
 
 <div class="row">
-            <div class="col-lg-12">
-                <div class="card">
-                    <div class="card-header">
-                        <a href="{{route('add-client')}}" class="btn btn-success">Add Client</a>
-                    </div>
-                    <div class="card-body">
-                        <table id="scroll-horizontal" class="table nowrap align-middle" style="width:100%">
-                            <thead>
-                                <tr>
-                                    <th scope="col">ID</th>
-                                    <th scope="col">Client</th>
-                                    <th scope="col">Industry</th>
-                                    <th scope="col">Status</th>
-                                    <th scope="col">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
 
-                                <?php if($clients->isNotEmpty()){ ?>
-                                    <?php foreach($clients as $key => $client){ ?>
-                                        <tr>
-                                            <td class="fw-medium">{{$key+1}}</td>
-                                            <td>{{$client->name}}</td>
-                                            <td>{{$client->industry}}</td>
-                                            <td>{{$client->status}}</td>
-                                            <td>
-                                                <div class="dropdown d-inline-block">
-                                                    <button class="btn btn-secondary btn-sm dropdown" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                                        <i class="ri-more-fill align-middle"></i>
-                                                    </button>
-                                                    <ul class="dropdown-menu dropdown-menu-end">
-                                                        <li><a href="{{url('edit-client/'.$client->id)}}" class="dropdown-item"><i class="mdi_icon mdi mdi-pencil-box-multiple text-muted"></i> Edit</a> </li>
-                                                        <li><a href="{{url('clients-properties/'.$client->id)}}" class="dropdown-item"><i class="mdi_icon mdi mdi-delete-circle-outline text-muted"></i> Properties</a></li>
-                                                    </ul>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    <?php } ?>
-                                <?php }else{ ?>
-                                    <tr>
-                                        <td colspan="5">No Record!!</td>
-                                    </tr>
-                                <?php } ?>
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                    <a href="{{ route('clients.create') }}" class="btn btn-primary btn-sm">
+                        <i class="mdi mdi-plus me-1"></i> Add Client
+                    </a>
+                    <div id="dt-controls" class="d-flex align-items-center gap-2"></div>
                 </div>
-            </div><!--end col-->
-        </div><!--end row-->
+
+                <table id="clients-table" class="table table-hover w-100">
+                    <thead>
+                        <tr>
+                            <th width="50">#</th>
+                            <th>Client</th>
+                            <th>Industry</th>
+                            <th>Team</th>
+                            <th>City</th>
+                            <th width="110">Status</th>
+                            <th width="70" class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($clients as $index => $client)
+                        <tr>
+                            <td>{{ $index + 1 }}</td>
+                            <td>{{ $client->name }}</td>
+                            <td>{{ $client->industry }}</td>
+                            <td>{{ $client->team->name ?? '—' }}</td>
+                            <td>{{ $client->city }}</td>
+                            <td>{{ $client->status }}</td>
+                            <td class="text-center">
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown">
+                                        <i class="mdi mdi-dots-horizontal"></i>
+                                    </button>
+
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="{{ route('clients.edit', $client->id) }}">
+                                                Edit
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item text-danger" href="#"
+                                            onclick="deleteClient({{ $client->id }}); return false;">
+                                                Delete
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+
+            </div>
+        </div>
+    </div>
+</div>
+
 
 @endsection

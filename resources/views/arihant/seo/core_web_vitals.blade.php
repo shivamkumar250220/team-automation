@@ -158,7 +158,7 @@
                 <form id="corewebvitalsform" novalidate>
                     @csrf
                     {{-- Hidden context fields --}}
-                    <input type="hidden" name="domainmanagement_id" value="{{ $domainmanagement_id }}">
+                    <input type="hidden" name="created_by_user_id" value="{{ $created_by_user_id }}">
                     <input type="hidden" name="client_property_id"  value="{{ $client_property_id }}">
 
                     <div class="row g-3">
@@ -402,7 +402,7 @@ document.getElementById('corewebvitalsform').addEventListener('submit', async fu
 
     try {
         const formData = new FormData(this);
-        const resp = await fetch("{{ route('core.web.vitals.form', [$domainmanagement_id, $client_property_id]) }}", {
+        const resp = await fetch("{{ route('core.web.vitals.form', [$created_by_user_id, $client_property_id]) }}", {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
             body: formData,

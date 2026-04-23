@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Client;
 use Session;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,14 +29,15 @@ class HomeController extends Controller
      */
     public function index()
     {
-
         $user = Auth::user();
         // dd($user);
         if ($user->role && $user->role->name === "Admin") {
-            $clients = DomainManagementModel::where('status', 'active')->orderBy('id', 'desc')->get();
+            $clients = Client::with('team:id,name')->where(['status'=> 'active'])->orderBy('id', 'desc')->get();
             return view('home', compact('clients'));
         }else{
-            $client_data = DomainManagementModel::with('Client_properties')->where("id", $user->domainmanagement_id)->get();
+            $client_data = Client::with('team:id,name')->with('Client_properties')->where(['status' => 'active', 'user_id' => $user->id])->orderBy('id', 'desc')->get();
+            // $client_data = Client::where("id", $user->domainmanagement_id)->get();
+            dd($client_data);
             return view("clients.show", compact("client_data"));
         }
         

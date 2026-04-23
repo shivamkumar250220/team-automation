@@ -49,9 +49,6 @@
 
 @section('content')
 
-{{-- ═══════════════════════════════════════════════════════════════════════════
-     FORM CARD
-════════════════════════════════════════════════════════════════════════════ --}}
 <div class="row g-4">
     
     @if($savedReports->isNotEmpty())
@@ -246,9 +243,9 @@
 <script>
 // ─── Blade → JS data ──────────────────────────────────────────────────────────
 const SAVE_URL             = '{{ route("ranking.competitor.report.save") }}';
-const FORM_URL             = '{{ route("ranking.competitor.report.form", [$domainmanagement_id, $client_property_id]) }}';
+const FORM_URL             = '{{ route("ranking.competitor.report.form", [$created_by_user_id, $client_property_id]) }}';
 const CSRF                 = document.querySelector('input[name="_token"]').value;
-const DOMAINMANAGEMENT_ID  = {{ $domainmanagement_id }};
+const created_by_user_id   = {{ $created_by_user_id }};
 const CLIENT_PROPERTY_ID   = {{ $client_property_id }};
 
 // All saved reports injected from the controller (keyed by id)
@@ -346,7 +343,7 @@ async function saveReport(results, location, keywordList, clientDomain, competit
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
             body: JSON.stringify({
-                domainmanagement_id: DOMAINMANAGEMENT_ID,
+                created_by_user_id: created_by_user_id,
                 client_property_id:  CLIENT_PROPERTY_ID,
                 location,
                 keywords:           keywordList,

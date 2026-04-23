@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class RankingCompetitorReport extends Model
 {
     protected $fillable = [
-        'domainmanagement_id',
+        'created_by_user_id',
         'client_property_id',
         'user_id',
         'location',

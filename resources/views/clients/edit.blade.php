@@ -1,204 +1,177 @@
 @extends('layouts.app')
 
-@section('title', 'Edit Client')
+@section('title', 'Edit Client — ' . $client->name)
 @section('page_header', 'Edit Client')
-@section('page_icon', 'mdi mdi-account-multiple')
+@section('page_icon', 'mdi mdi-account-edit')
 
 @section('breadcrumb')
-    <li class="breadcrumb-item"><a href="{{route('clients')}}">Clients</a></li>
-    <li class="breadcrumb-item active">Edit {{$data->name}}</li>
+    <li class="breadcrumb-item"><a href="{{ route('clients.index') }}">Clients</a></li>
+    <li class="breadcrumb-item active">Edit — {{ $client->name }}</li>
 @endsection
 
-@push('styles')
-<link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-@endpush
+@section('content')
 
-@section("content")
+<form action="{{ route('clients.update', $client->id) }}" method="POST" autocomplete="off">
+    @csrf
+    @method('PUT')
 
+    <div class="row g-3">
 
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="live-preview">
-                            <form class="row g-3" method="post" action="{{url('edit-client')}}">
-                                @csrf
-                                
-                                <div class="col-md-4">
-                                    <label for="validationDefault01" class="form-label">Name*</label>
-                                    <input type="text" name="name" class="form-control" id="name" value="{{$data->name}}" required="">
-                                </div>
-                                <input type="text" name="id" class="form-control" id="id" value="{{$data->id}}" hidden>
-                                <input type="text" name="userid" class="form-control" id="userid" value="{{$data1->id}}" hidden>
-                                <div class="col-md-4">
-                                    <label for="validationDefault02" class="form-label">Phone*</label>
-                                    <input type="text" name="phone" class="form-control" id="phone" value="{{$data->phone}}" required="">
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="validationDefaultUsername" class="form-label">Email*</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text" id="inputGroupPrepend2">@</span>
-                                        <input type="text" name="email" class="form-control" id="email" value="{{$data->email}}" aria-describedby="inputGroupPrepend2" required="">
-                                    </div>
-                                </div>
-                                <div class="col-md-12">
-                                    <label for="validationDefault02" class="form-label">Slug <strong>(*Provide slug same as used in LMS for)</strong></label>
-                                </div>
-                                
-                                <div class="col-md-6">
-                                    <label for="customer_id" class="form-label">Customer ID*</label>
-                                    <input type="text" name="customer_id" class="form-control" id="customer_id" value="{{$data->customer_id}}" required="">
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="manager_id" class="form-label">Manager ID*</label>
-                                    <input type="text" name="manager_id" class="form-control" id="manager_id" value="{{$data->manager_id}}" required="">
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="validationDefault01" class="form-label">Appointment Scheduled*</label>
-                                    <input type="text" name="scheduled" class="form-control" id="scheduled" value="{{$scheduled_slug}}" required="">
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="validationDefault01" class="form-label">Appointment Visited*</label>
-                                    <input type="text" name="visited" class="form-control" id="visited" value="{{$visited_slug}}" required="">
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="validationDefault01" class="form-label">Appointment Missed*</label>
-                                    <input type="text" name="missed" class="form-control" id="missed" value="{{$missed_slug}}" required="">
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="validationDefault01" class="form-label">Interested*</label>
-                                    <input type="text" name="interested" class="form-control" id="interested" value="{{$interested_slug}}" required="">
-                                </div>
-                  
-                                <div class="col-md-4">
-                                    <label for="validationDefault04" class="form-label">Industry*</label>
-                                    <select class="form-select" name="industry" id="industry" required="">
-                                        <option selected="" disabled="" value="">Choose...</option>
-                                        <option {{$data->industry == 'ivf' ? 'selected' :'' }} value="ivf">IVF</option>
-                                        <option {{$data->industry == 'hair' ? 'selected' :'' }} value="hair">Hair Transplant</option>
-                                        <option {{$data->industry == 'dental' ? 'selected' :'' }} value="dental">Dental</option>
-                                        <option {{$data->industry == 'dermatologist' ? 'selected' :'' }} value="dermatologist">Dermatologist</option>
-                                        <option {{$data->industry == 'other' ? 'selected' :'' }} value="other">Other</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="validationDefault05" class="form-label">City*</label>
-                                    <select class="form-select" name="city" id="city" required="">
-                                        <option selected="" disabled="" value="">Choose...</option>
-                                        <option {{$data->city == 'delhi' ? 'selected' :'' }} value="delhi">Delhi</option>
-                                        <option {{$data->city == 'gurugram' ? 'selected' :'' }} value="gurugram">Gurugram</option>
-                                        <option {{$data->city == 'noida' ? 'selected' :'' }} value="noida">Noida</option>
-                                        <option {{$data->city == 'mumbai' ? 'selected' :'' }} value="mumbai">Mumbai</option>
-                                        <option {{$data->city == 'bangalore' ? 'selected' :'' }} value="bangalore">Bangalore</option>
-                                        <option {{$data->city == 'other' ? 'selected' :'' }} value="other">Other</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="validationDefault05" class="form-label">Zip*</label>
-                                    <input type="text" name="zip" class="form-control" id="zip" required="" value="{{$data->zip}}">
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="validationDefault02" class="form-label">Password*</label>
-                                    <input type="password" id="password" name="password" class="form-control" value="" autocomplete="new-password">
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="validationDefault05" class="form-label">Status</label>
-                                    <div class="form-check">
-                                        <input type="radio" value="active" class="form-check-input" id="validationFormCheck2" {{$data->status == 'active' ? 'checked' :'' }} name="status">
-                                        <label class="form-check-label" for="validationFormCheck2">Active</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input type="radio" value="inactive" class="form-check-input" id="validationFormCheck3" {{$data->status == 'inactive' ? 'checked' :'' }} name="status">
-                                        <label class="form-check-label" for="validationFormCheck3">InActive</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <label for="validationDefault05" class="form-label">Type</label>
-                                    <div class="form-check">
-                                        <input type="radio" value="Admin" class="form-check-input" checked="checked" id="validationFormCheck4" {{$data1->type == 'Admin' ? 'checked' :'' }} name="type">
-                                        <label class="form-check-label" for="validationFormCheck4">Admin</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input type="radio" value="SA" class="form-check-input" id="validationFormCheck5" {{$data1->type == 'SA' ? 'checked' :'' }} name="type">
-                                        <label class="form-check-label" for="validationFormCheck5">Super Admin</label>
-                                    </div>
-                                </div>
-                                <div class="col-12">
-                                    <button class="btn btn-primary" type="submit">Update</button>
-                                </div>
-                            </form>
+        <div class="col-12">
+            <div class="card mb-0">
+                <div class="card-body">
+                    <h6 class="card-title mb-1">Basic Information</h6>
+                    <p class="card-subtitle mb-4">Client contact details</p>
+
+                    <div class="row g-3">
+
+                        <div class="col-md-4">
+                            <label class="form-label">Name <span class="text-danger">*</span></label>
+                            <input type="text" name="name"
+                                   class="form-control @error('name') is-invalid @enderror"
+                                   value="{{ old('name', $client->name) }}">
+                            @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Phone <span class="text-danger">*</span></label>
+                            <input type="text" name="phone"
+                                   class="form-control @error('phone') is-invalid @enderror"
+                                   value="{{ old('phone', $client->phone) }}">
+                            @error('phone')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Email <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="mdi mdi-at"></i></span>
+                                <input type="email" name="email"
+                                       class="form-control @error('email') is-invalid @enderror"
+                                       value="{{ old('email', $client->email) }}">
+                                @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-8">
+                            <label class="form-label">
+                                Slug <span class="text-danger">*</span>
+                                <small class="text-muted fw-normal ms-1">(same as used in LMS)</small>
+                            </label>
+                            <input type="text" name="slug"
+                                   class="form-control @error('slug') is-invalid @enderror"
+                                   value="{{ old('slug', $client->slug) }}">
+                            @error('slug')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card mb-0">
+                <div class="card-body">
+                    <h6 class="card-title mb-1">Business Details</h6>
+                    <p class="card-subtitle mb-4">Industry, location and assignment</p>
+
+                    <div class="row g-3">
+
+                        <div class="col-md-4">
+                            <label class="form-label">Industry <span class="text-danger">*</span></label>
+                            <select name="industry" class="form-select @error('industry') is-invalid @enderror">
+                                @foreach(['dermatologist' => 'Dermatologist', 'ivf' => 'IVF', 'other' => 'Other'] as $val => $label)
+                                    <option value="{{ $val }}" {{ old('industry', $client->industry) == $val ? 'selected' : '' }}>
+                                        {{ $label }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('industry')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">City</label>
+                            <select name="city" class="form-select @error('city') is-invalid @enderror">
+                                <option value="">— Select city —</option>
+                                @foreach(['Delhi','Mumbai','Bangalore','Chennai','Hyderabad','Pune','Other'] as $city)
+                                    <option value="{{ $city }}" {{ old('city', $client->city) == $city ? 'selected' : '' }}>
+                                        {{ $city }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('city')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Zip</label>
+                            <input type="text" name="zip"
+                                   class="form-control @error('zip') is-invalid @enderror"
+                                   value="{{ old('zip', $client->zip) }}">
+                            @error('zip')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">
+                                Assigned User <span class="text-danger">*</span>
+                                <small class="text-muted fw-normal ms-1">(team auto-assigned)</small>
+                            </label>
+                            <select name="user_id" class="form-select @error('user_id') is-invalid @enderror">
+                                <option value="" disabled>Select user…</option>
+                                @foreach($users as $user)
+                                    <option value="{{ $user->id }}" {{ old('user_id', $client->user_id) == $user->id ? 'selected' : '' }}>
+                                        {{ $user->name }}
+                                        @if($user->team) — {{ $user->team->name }} @endif
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('user_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        @if($client->team)
+                        <div class="col-md-4">
+                            <label class="form-label">Current Team</label>
+                            <input type="text" class="form-control" value="{{ $client->team->name }}" readonly disabled>
+                            <small class="text-muted">Auto-updated when user changes</small>
+                        </div>
+                        @endif
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card mb-0 h-100">
+                <div class="card-body">
+                    <h6 class="card-title mb-1">Status</h6>
+                    <p class="card-subtitle mb-3">Account availability</p>
+                    <div class="d-flex gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="status" id="status_active"
+                                   value="active" {{ old('status', $client->status) == 'active' ? 'checked' : '' }}>
+                            <label class="form-check-label fw-medium" for="status_active">Active</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="status" id="status_inactive"
+                                   value="inactive" {{ old('status', $client->status) == 'inactive' ? 'checked' : '' }}>
+                            <label class="form-check-label fw-medium" for="status_inactive">Inactive</label>
                         </div>
                     </div>
                 </div>
-            </div> <!-- end col -->
+            </div>
         </div>
-        <!-- end row -->
-    </div> <!-- container-fluid -->
-</div>
 
-<script>
-function addNameUpdateListener(id) {
-    document.addEventListener("DOMContentLoaded", function() {
-        var nameInput = document.getElementById(id);
+        <div class="col-12">
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="mdi mdi-content-save me-1"></i> Update Client
+                </button>
+                <a href="{{ route('clients.index') }}" class="btn btn-light">
+                    <i class="mdi mdi-arrow-left me-1"></i> Back
+                </a>
+            </div>
+        </div>
 
-        nameInput.addEventListener("keyup", function() {
-            nameInput.setAttribute("name", id + "_update");
-        });
-    });
-}
+    </div>
+</form>
 
-addNameUpdateListener("name");
-addNameUpdateListener("phone");
-addNameUpdateListener("email");
-addNameUpdateListener("scheduled");
-addNameUpdateListener("visited");
-addNameUpdateListener("missed");
-addNameUpdateListener("interested");
-addNameUpdateListener("zip");
-addNameUpdateListener("password");
-
-function addNameUpdateListenerOnClick(id) {
-    document.addEventListener("DOMContentLoaded", function() {
-        var nameInput = document.getElementById(id);
-
-        nameInput.addEventListener("click", function() {
-            nameInput.setAttribute("name", id + "_update");
-        });
-    });
-}
-
-addNameUpdateListenerOnClick("industry");
-addNameUpdateListenerOnClick("city");
-
-document.addEventListener("DOMContentLoaded", function() {
-    var nameInput = document.getElementById("validationFormCheck2");
-
-    nameInput.addEventListener("click", function() {
-        nameInput.setAttribute("name", "status_update");
-    });
-});
-document.addEventListener("DOMContentLoaded", function() {
-    var nameInput = document.getElementById("validationFormCheck3");
-
-    nameInput.addEventListener("click", function() {
-        nameInput.setAttribute("name", "status_update");
-    });
-});
-
-document.addEventListener("DOMContentLoaded", function() {
-    var nameInput = document.getElementById("validationFormCheck4");
-
-    nameInput.addEventListener("click", function() {
-        nameInput.setAttribute("name", "type_update");
-    });
-});
-document.addEventListener("DOMContentLoaded", function() {
-    var nameInput = document.getElementById("validationFormCheck5");
-
-    nameInput.addEventListener("click", function() {
-        nameInput.setAttribute("name", "type_update");
-    });
-});
-</script>
 @endsection

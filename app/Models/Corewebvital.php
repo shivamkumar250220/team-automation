@@ -10,7 +10,7 @@ class CoreWebVital extends Model
     protected $table = 'core_web_vitals';
 
     protected $fillable = [
-        'domainmanagement_id',
+        'created_by_user_id',
         'client_property_id',
         'user_id',
         'url',
