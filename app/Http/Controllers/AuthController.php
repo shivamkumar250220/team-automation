@@ -33,38 +33,40 @@ class AuthController extends Controller
                     ->where('email', $request->email)
                     ->first();
 
-        if (! $user) {
+        if (!$user) {
             return back()->withErrors(['email' => 'Invalid email or password.'])->withInput();
         }
 
         try {
             $passwordMatch = Hash::check($request->password, $user->password);
         } catch (\RuntimeException $e) {
-            return back()
-                ->withErrors(['email' => 'Something went wrong with password. Please contact admin or reset password.'])
-                ->withInput();
+            return back()->withErrors(['email' => 'Something went wrong with password. Please contact admin or reset password.'])->withInput();
         }
 
-        if (! $passwordMatch) {
+        if (!$passwordMatch) {
             return back()->withErrors(['email' => 'Invalid email or password.'])->withInput();
         }
 
-        if (! $user->is_active) {
+        if (!$user->is_active) {
             return back()->withErrors(['email' => 'Your account is disabled.'])->withInput();
         }
 
-        if (! $user->role || ! $user->role->is_active) {
+        if (!$user->role || !$user->role->is_active) {
             return back()->withErrors(['email' => 'Your role is inactive.'])->withInput();
         }
 
-        if ($user->team_id && (! $user->team || ! $user->team->is_active)) {
+        if ($user->team_id && (!$user->team || !$user->team->is_active)) {
             return back()->withErrors(['email' => 'Your team is inactive.'])->withInput();
         }
 
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard'));
+        if ($user->team_id === 2) {
+            return redirect()->route('gmb.dashboard');
+        }
+
+        return redirect()->route('dashboard');
     }
     
     public function index()

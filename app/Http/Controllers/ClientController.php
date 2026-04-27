@@ -10,10 +10,9 @@ use Illuminate\Validation\Rule;
 
 class ClientController extends Controller
 {
-   public function index()
+    public function index()
     {
         $clients = Client::with('team:id,name')->get();
-
         return view('clients.index', compact('clients'));
     }
 
@@ -23,7 +22,6 @@ class ClientController extends Controller
                      ->where('role_id', '!=', 1)
                      ->orderBy('name')
                      ->get();
-
         return view('clients.create', compact('users'));
     }
 
@@ -54,7 +52,7 @@ class ClientController extends Controller
     public function show(Client $client)
     {
         $client->load(['creator:id,name', 'team:id,name', 'user:id,name,email']);
-        return view('clients.show', compact('client'));
+        return view('gms.gmb.clients.show', compact('client'));
     }
 
     public function edit(Client $client)
@@ -63,7 +61,6 @@ class ClientController extends Controller
                      ->where('role_id', '!=', 1)
                      ->orderBy('name')
                      ->get();
-
         return view('clients.edit', compact('client', 'users'));
     }
 

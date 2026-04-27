@@ -6,19 +6,10 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', config('app.name', 'Admin Panel'))</title>
 
-    {{-- Google Fonts --}}
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    {{-- Bootstrap 5 --}}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    {{-- Material Design Icons --}}
     <link href="https://cdnjs.cloudflare.com/ajax/libs/MaterialDesign-Webfont/7.2.96/css/materialdesignicons.min.css" rel="stylesheet">
-
-    {{-- Font Awesome --}}
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-
-    {{-- Main Admin CSS --}}
     <link href="{{ asset('css/style.css') }}" rel="stylesheet">
 
     <style>
@@ -53,11 +44,8 @@
 
 <div class="container-scroller">
 
-    {{-- ===== NAVBAR ===== --}}
     <nav class="navbar default-layout-navbar col-12 p-0 fixed-top d-flex flex-row">
-
-        {{-- Brand Wrapper --}}
-        <div class="navbar-brand-wrapper d-flex align-items-center justify-content-start flex-shrink-0">
+    <div class="navbar-brand-wrapper d-flex align-items-center justify-content-start flex-shrink-0">
     
     <a class="navbar-brand brand-logo" href="{{ route('dashboard') }}">
         <span class="brand-text">
@@ -97,68 +85,6 @@
 
             {{-- Right Nav Items --}}
             <ul class="navbar-nav navbar-nav-right ms-auto d-flex flex-row flex-nowrap align-items-center flex-shrink-0">
-
-                {{-- Notifications --}}
-                {{-- <li class="nav-item dropdown">
-                    <a class="nav-link count-indicator dropdown-toggle" id="notificationDropdown" href="#" data-bs-toggle="dropdown">
-                        <i class="mdi mdi-bell-outline nav-icon"></i>
-                        <span class="count-symbol bg-danger"></span>
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-end navbar-dropdown preview-list" aria-labelledby="notificationDropdown">
-                        <h6 class="dropdown-header-title p-3 mb-0">Notifications</h6>
-                        <div class="dropdown-divider"></div>
-                        <a class="dropdown-item preview-item">
-                            <div class="preview-thumbnail">
-                                <div class="preview-icon bg-primary-soft">
-                                    <i class="mdi mdi-calendar text-primary"></i>
-                                </div>
-                            </div>
-                            <div class="preview-item-content">
-                                <h6 class="preview-subject mb-1">Event today</h6>
-                                <p class="text-muted small mb-0">Just a reminder that you have an event</p>
-                            </div>
-                        </a>
-                        <div class="dropdown-divider"></div>
-                        <a class="dropdown-item preview-item">
-                            <div class="preview-thumbnail">
-                                <div class="preview-icon bg-success-soft">
-                                    <i class="mdi mdi-cog text-success"></i>
-                                </div>
-                            </div>
-                            <div class="preview-item-content">
-                                <h6 class="preview-subject mb-1">Settings updated</h6>
-                                <p class="text-muted small mb-0">Update dashboard settings</p>
-                            </div>
-                        </a>
-                        <div class="dropdown-divider"></div>
-                        <p class="p-3 mb-0 text-center text-primary small fw-semibold">See all notifications</p>
-                    </div>
-                </li> --}}
-
-                {{-- Messages --}}
-                {{-- <li class="nav-item dropdown">
-                    <a class="nav-link count-indicator dropdown-toggle" id="messageDropdown" href="#" data-bs-toggle="dropdown">
-                        <i class="mdi mdi-email-outline nav-icon"></i>
-                        <span class="count-symbol bg-warning"></span>
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-end navbar-dropdown preview-list" aria-labelledby="messageDropdown">
-                        <h6 class="dropdown-header-title p-3 mb-0">Messages</h6>
-                        <div class="dropdown-divider"></div>
-                        <a class="dropdown-item preview-item">
-                            <div class="preview-thumbnail">
-                                <img src="https://ui-avatars.com/api/?name=John+Doe&background=1A4A7A&color=fff&size=36" alt="avatar" class="profile-pic rounded-circle">
-                            </div>
-                            <div class="preview-item-content">
-                                <h6 class="preview-subject mb-1">John sent you a message</h6>
-                                <p class="text-muted small mb-0">2 minutes ago</p>
-                            </div>
-                        </a>
-                        <div class="dropdown-divider"></div>
-                        <p class="p-3 mb-0 text-center text-primary small fw-semibold">See all messages</p>
-                    </div>
-                </li> --}}
-
-                {{-- Profile --}}
                 <li class="nav-item dropdown nav-profile">
                     <a class="nav-link dropdown-toggle d-flex align-items-center" id="profileDropdown" href="#" data-bs-toggle="dropdown">
                         <div class="nav-profile-img me-2 flex-shrink-0">
@@ -203,9 +129,8 @@
         <nav class="sidebar sidebar-offcanvas" id="sidebar">
             <ul class="nav">
 
-                {{-- Dashboard --}}
-                <li class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ route('dashboard') }}">
+               <li class="nav-item {{ request()->routeIs('dashboard') || request()->routeIs('gmb.dashboard') ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ auth()->user()->team_id == 2 ? route('gmb.dashboard') : route('dashboard') }}">
                         <span class="menu-title">Dashboard</span>
                         <i class="mdi mdi-view-dashboard-outline menu-icon"></i>
                     </a>

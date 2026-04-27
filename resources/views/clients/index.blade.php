@@ -55,7 +55,7 @@
 
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         <li>
-                                            <a class="dropdown-item" href="{{ route('clients.show', $client->id) }}">
+                                            <a class="dropdown-item" href="{{ route('gmb.clients.show', $client->id) }}">
                                                 View
                                             </a>
                                         </li>

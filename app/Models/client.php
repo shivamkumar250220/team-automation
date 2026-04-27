@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\GmbApiCredential;
+use App\Models\GmbLocation;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -37,5 +39,15 @@ class Client extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function gmbLocations()
+    {
+        return $this->hasMany(GmbLocation::class);
+    }
+    
+    public function gmbCredential()
+    {
+        return $this->hasOne(GmbApiCredential::class);
     }
 }
