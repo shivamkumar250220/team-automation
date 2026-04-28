@@ -30,40 +30,46 @@
                             <tbody>
                                 <?php
                                 if($client_data->isNotEmpty()){ ?>
-                                    <?php foreach($client_data as $key => $client){  ?>
-                                        <?php 
-                                            foreach($client->Client_properties as $lms){
-                                        ?>
+                                    <?php foreach($client_data as $key => $client){ ?>
                                             <tr>
-                                                @if($lms->type == 'lms')
+                                                @if($client->type == 'lms')
                                                 <td>LMS</td>
-                                                @elseif($lms->type == 'website')
+                                                @elseif($client->type == 'website')
                                                 <td>website</td>
-                                                @elseif($lms->type == 'landing')
+                                                @elseif($client->type == 'landing')
                                                 <td>website</td>
                                                 @endif
-                                                <td>{{$lms->domain}}</td>
+                                                <td>{{$client->domain}}</td>
                                                 <td>
                                                     <div class="dropdown d-inline-block">
                                                         <button class="btn btn-secondary btn-sm dropdown" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                                             <i class="ri-more-fill align-middle"></i>
                                                         </button>
                                                         <ul class="dropdown-menu dropdown-menu-end">
-                                                            <li class="dropdown-item">
-                                                                <a href="{{url('ranking-competitor-report/'.$lms->domainmanagement_id.'/'.$lms->id)}}" class="btn btn-link nav-link" style="text-align:left; padding:0; border:none; background:none;">
-                                                                    <i class="mdi_icon mdi mdi-pencil-box-multiple text-muted"></i> Ranking-Competitor Report
-                                                                </a> 
-                                                            </li>
-                                                            <li class="dropdown-item">
-                                                                <a href="{{url('core-web-vitals/'.$lms->domainmanagement_id.'/'.$lms->id)}}" class="btn btn-link nav-link" style="text-align:left; padding:0; border:none; background:none;">
-                                                                    <i class="mdi_icon mdi mdi-delete-circle-outline text-muted"></i> Core Web Vitals
-                                                                </a>
-                                                            </li>
+                                                            
+                                                            @if(in_array(Auth::user()->role->name, ['Admin']) || Auth::user()->team_id == 1)
+                                                                <li class="dropdown-item">
+                                                                    <a href="{{url('ranking-competitor-report/'.$client->id.'/'.$client->user_id)}}" class="btn btn-link nav-link" style="text-align:left; padding:0; border:none; background:none;">
+                                                                        <i class="mdi_icon mdi mdi-pencil-box-multiple text-muted"></i> Ranking-Competitor Report
+                                                                    </a> 
+                                                                </li>
+                                                                <li class="dropdown-item">
+                                                                    <a href="{{url('core-web-vitals/'.$client->id.'/'.$client->user_id)}}" class="btn btn-link nav-link" style="text-align:left; padding:0; border:none; background:none;">
+                                                                        <i class="mdi_icon mdi mdi-delete-circle-outline text-muted"></i> Core Web Vitals
+                                                                    </a>
+                                                                </li>
+                                                                
+                                                                <li><hr class="dropdown-divider"></li>
+                                                                <li>
+                                                                    <a class="dropdown-item text-success" href="{{url('reporting-sheet/'.$client->id.'/'.$client->user_id)}}">
+                                                                        Reporting Sheet
+                                                                    </a>
+                                                                </li>
+                                                            @endif
                                                         </ul>
                                                     </div>
                                                 </td>
                                             </tr>
-                                        <?php  } ?>
                                         
                                     <?php } ?>
                                 <?php }else{ ?>

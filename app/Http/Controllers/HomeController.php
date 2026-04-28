@@ -31,15 +31,20 @@ class HomeController extends Controller
     {
         $user = Auth::user();
         // dd($user);
-        if ($user->role && $user->role->name === "Admin") {
-            $clients = Client::with('team:id,name')->where(['status'=> 'active'])->orderBy('id', 'desc')->get();
-            return view('home', compact('clients'));
-        }else{
-            $client_data = Client::with('team:id,name')->with('Client_properties')->where(['status' => 'active', 'user_id' => $user->id])->orderBy('id', 'desc')->get();
-            // $client_data = Client::where("id", $user->domainmanagement_id)->get();
-            dd($client_data);
-            return view("clients.show", compact("client_data"));
-        }
+        // if ($user->role && $user->role->name === "Admin") {
+        // $condition =null;
+        // if($user->role->name != "Admin") {
+        //     $condition = ['user_id' => $user->id];
+        // }
+        // dd($condition);
+        $clients = Client::with('team:id,name')->where(['status'=> 'active'])->orderBy('id', 'desc')->get();
+        return view('home', compact('clients'));
+        // }else{
+        //     $client_data = Client::with('team:id,name')->with('Client_properties')->where(['status' => 'active', 'user_id' => $user->id])->orderBy('id', 'desc')->get();
+        //     // $client_data = Client::where("id", $user->domainmanagement_id)->get();
+        //     // dd($client_data);
+        //     return view("clients.show", compact("client_data"));
+        // }
         
     }
 

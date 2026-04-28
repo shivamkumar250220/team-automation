@@ -217,12 +217,11 @@
                             <i class="mdi mdi-view-dashboard-outline menu-icon"></i>
                         </a>
                     </li>
-                    
                     <li class="nav-item {{ !request()->routeIs('dashboard') ? 'active' : '' }}">
                         <a class="nav-link" data-bs-toggle="collapse" href="#clients-menu">
                             @if(Auth::user()->role->name == "Admin")
                                 <span class="menu-title">Manage Clients</span>
-                            @else
+                            @elseif(Auth::user()->role->name == "Manager")
                                 <span class="menu-title">Manage Details</span>
                             @endif
                             <i class="menu-arrow"></i>
@@ -232,7 +231,7 @@
                             <ul class="nav flex-column sub-menu">
                                 <li class="nav-item">
 
-                                    @if(Auth::user()->role->name == "Admin")
+                                    @if(in_array(Auth::user()->role->name, ['Manager', 'Admin']))
                                         <div class="collapse menu-dropdown show" id="sidebarDashboards">
                                             <ul class="nav nav-sm flex-column">
                                                 <li class="nav-item">

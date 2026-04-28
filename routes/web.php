@@ -54,10 +54,17 @@ Route::middleware(['auth', 'session.valid'])->group(function () {
     // Seo Automation
     // Route::prefix('arihant')->name('arihant.')->group(function () {
     //     });
-    Route::get('/ranking-competitor-report/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'rankingCompetitorReport'])->name('ranking.competitor.report');
-    Route::post('/ranking-competitor-report/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'rankingCompetitorReportForm'])->name('ranking.competitor.report.form');
-    Route::post('/ranking-competitor-report/save',[SEOAutomationController::class, 'saveRankingCompetitorReport'])->name('ranking.competitor.report.save');
-    
-    Route::get('/core-web-vitals/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'coreWebVitals'])->name('core.web.vitals');
-    Route::post('/core-web-vitals/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'coreWebVitalsform'])->name('core.web.vitals.form');
+    Route::middleware(['auth:seo', 'session.valid'])->group(function () {
+        Route::get('/ranking-competitor-report/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'rankingCompetitorReport'])->name('ranking.competitor.report');
+        Route::post('/ranking-competitor-report/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'rankingCompetitorReportForm'])->name('ranking.competitor.report.form');
+        Route::post('/ranking-competitor-report/save',[SEOAutomationController::class, 'saveRankingCompetitorReport'])->name('ranking.competitor.report.save');
+        
+        Route::get('/core-web-vitals/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'coreWebVitals'])->name('core.web.vitals');
+        Route::post('/core-web-vitals/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'coreWebVitalsform'])->name('core.web.vitals.form');
+        
+        Route::get('/reporting-sheet/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'reportingSheet'])->name('reporting.sheet');
+        Route::post('/reporting-sheet/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'reportingSheetForm'])->name('reporting.sheet.form');
+        // web.php or api.php — REMOVE after debugging
+        Route::get('/debug-permissions', [SEOAutomationController::class, 'cleanupServiceAccountDrive']);
+    });
 });
