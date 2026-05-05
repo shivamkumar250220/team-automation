@@ -54,38 +54,39 @@ class GmbGeminiService
         }
     }
 
+
     private function buildPrompt(string $reviewerName, string $reviewText, int $starRating, string $clinicName): string
     {
         $sentiment = $starRating <= 2 ? 'negative' : ($starRating === 3 ? 'neutral' : 'positive');
 
         return <<<PROMPT
-You are a professional healthcare clinic response writer for "{$clinicName}".
+        You are a professional healthcare clinic response writer for "{$clinicName}".
 
-A patient left a {$starRating}-star ({$sentiment}) review:
-Reviewer: {$reviewerName}
-Review: "{$reviewText}"
+        A patient left a {$starRating}-star ({$sentiment}) review:
+        Reviewer: {$reviewerName}
+        Review: "{$reviewText}"
 
-Write exactly 5 different response drafts, each with a different tone:
-Draft 1: Warm and empathetic
-Draft 2: Professional and formal  
-Draft 3: Friendly and conversational
-Draft 4: Concise and direct
-Draft 5: Detailed and reassuring
+        Write exactly 5 different response drafts, each with a different tone:
+        Draft 1: Warm and empathetic
+        Draft 2: Professional and formal  
+        Draft 3: Friendly and conversational
+        Draft 4: Concise and direct
+        Draft 5: Detailed and reassuring
 
-Rules:
-- Each response must be 2-4 sentences
-- Address the reviewer by first name
-- For negative reviews, acknowledge the concern and offer to resolve offline
-- Do not make specific medical promises
-- End with clinic name
+        Rules:
+        - Each response must be 2-4 sentences
+        - Address the reviewer by first name
+        - For negative reviews, acknowledge the concern and offer to resolve offline
+        - Do not make specific medical promises
+        - End with clinic name
 
-Format your response EXACTLY like this (no extra text):
-DRAFT_1: [response here]
-DRAFT_2: [response here]
-DRAFT_3: [response here]
-DRAFT_4: [response here]
-DRAFT_5: [response here]
-PROMPT;
+        Format your response EXACTLY like this (no extra text):
+        DRAFT_1: [response here]
+        DRAFT_2: [response here]
+        DRAFT_3: [response here]
+        DRAFT_4: [response here]
+        DRAFT_5: [response here]
+        PROMPT;
     }
 
     private function parseDrafts(string $text): array
@@ -100,5 +101,44 @@ PROMPT;
         }
 
         return $drafts;
+    }
+
+   public function generatePost(string $prompt): string
+    {
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Content-Type'  => 'application/json',
+            ])->post($this->apiUrl, [
+                'model' => 'gpt-4o-mini',
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You are a professional content writer.',
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => $prompt,
+                    ],
+                ],
+                'temperature' => 0.85,
+                'max_tokens' => 1500,
+            ]);
+
+            if ($response->failed()) {
+                Log::error('[OpenAI] Post generation failed', [
+                    'body' => $response->body()
+                ]);
+                return '';
+            }
+
+            return $response->json('choices.0.message.content', '');
+
+        } catch (\Exception $e) {
+            Log::error('[OpenAI] Exception', [
+                'message' => $e->getMessage()
+            ]);
+            return '';
+        }
     }
 }

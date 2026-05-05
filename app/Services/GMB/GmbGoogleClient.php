@@ -2,7 +2,10 @@
 
 namespace App\Services\GMB;
 
+use App\Models\GmbApiCredential;
+use App\Models\GmbLocation;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class GmbGoogleClient
 {
@@ -89,7 +92,6 @@ class GmbGoogleClient
             ->get("https://mybusinessbusinessinformation.googleapis.com/v1/{$accountName}/locations");
 
         if ($response->status() === 429) {
-            // Don't crash the whole loop — just return empty for this account
             return [];
         }
 
@@ -99,7 +101,8 @@ class GmbGoogleClient
 
         return $response->json()['locations'] ?? [];
     }
-    public function getValidToken(\App\Models\GmbApiCredential $credential): string
+
+    public function getValidToken(GmbApiCredential $credential): string
     {
         if (now()->gte($credential->expires_at)) {
             $data = $this->refreshToken($credential->refresh_token);
@@ -113,5 +116,28 @@ class GmbGoogleClient
         }
 
         return $credential->access_token;
+    }
+
+    public function postReply(GmbLocation $location, string $reviewId, string $replyText, string $token): bool
+    {
+        $accountId  = $this->resolveId($location->gbp_account_id, 'accounts');
+        $locationId = $this->resolveId($location->gbp_location_id, 'locations');
+
+        $url = "https://mybusiness.googleapis.com/v4/{$accountId}/{$locationId}/reviews/{$reviewId}/reply";
+
+        $response = Http::withToken($token)->put($url, ['comment' => $replyText]);
+
+        if ($response->failed()) {
+            Log::error("GMB postReply failed for review {$reviewId}: " . $response->body());
+            return false;
+        }
+
+        return true;
+    }
+
+    private function resolveId(string $raw, string $prefix): string
+    {
+        $raw = trim($raw);
+        return str_starts_with($raw, $prefix . '/') ? $raw : $prefix . '/' . $raw;
     }
 }

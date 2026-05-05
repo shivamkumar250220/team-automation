@@ -11,6 +11,8 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('gmb:pull-insights')->monthlyOn(1, '00:00');
         $schedule->command('gmb:citation-scan')->monthlyOn(1, '01:00');
+        $schedule->command('gmb:check-negative-reviews')->everyFourHours();
+        $schedule->command('gmb:pull-competitor-data')->monthlyOn(1, '02:00');
     }
 
     protected function commands(): void

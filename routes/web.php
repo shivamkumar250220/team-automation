@@ -5,9 +5,11 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\GMB\CitationScanController;
 use App\Http\Controllers\GMB\DashboardController;
 use App\Http\Controllers\GMB\GmbAuthController;
+use App\Http\Controllers\GMB\GmbCompetitorController;
 use App\Http\Controllers\GMB\GmbInsightController;
+use App\Http\Controllers\GMB\GmbPostTemplateController;
+use App\Http\Controllers\GMB\GmbReviewAlertController;
 use App\Http\Controllers\GMB\GmbReviewController;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [AuthController::class, 'showLogin'])->name('login');
@@ -83,6 +85,21 @@ Route::middleware(['auth', 'session.valid'])->group(function () {
         Route::post('citation/{client}/run',             [CitationScanController::class, 'run'])->name('citation.run');
         Route::post('citation/audit/{audit}/corrected',  [CitationScanController::class, 'markCorrected'])->name('citation.mark-corrected');
         Route::post('citation/audit/{audit}/manual',     [CitationScanController::class, 'manualUpdate'])->name('citation.manual-update');
+
+        Route::get('review-alerts/{client}',        [GmbReviewAlertController::class, 'index'])->name('review-alerts.index');
+        Route::post('review-alerts/{client}/run',   [GmbReviewAlertController::class, 'runNow'])->name('review-alerts.run');
+
+        Route::get('competitors/{client}',              [GmbCompetitorController::class, 'index'])->name('competitors.index');
+        Route::post('competitors/{client}/store',       [GmbCompetitorController::class, 'store'])->name('competitors.store');
+        Route::post('competitors/{client}/pull',        [GmbCompetitorController::class, 'pullNow'])->name('competitors.pull');
+        Route::post('competitors/{client}/{competitor}/delete', [GmbCompetitorController::class, 'destroy'])->name('competitors.destroy');
+
+        Route::get('post-templates/{client}',                    [GmbPostTemplateController::class, 'index'])            ->name('post-templates.index');
+        Route::get('post-templates/{client}/fetch-competitors',  [GmbPostTemplateController::class, 'fetchCompetitors']) ->name('post-templates.fetch-competitors');
+        Route::post('post-templates/{client}/generate',          [GmbPostTemplateController::class, 'generatePost'])     ->name('post-templates.generate');
+        Route::post('post-templates/{client}/store',             [GmbPostTemplateController::class, 'store'])            ->name('post-templates.store');
+        Route::post('post-templates/{client}/{post}/publish',    [GmbPostTemplateController::class, 'publish'])          ->name('post-templates.publish');
+        Route::post('post-templates/{client}/{post}/delete',     [GmbPostTemplateController::class, 'destroy'])          ->name('post-templates.destroy');
     });
 
     Route::resource('clients', ClientController::class);
@@ -92,4 +109,12 @@ Route::middleware(['auth', 'session.valid'])->group(function () {
         return view('profile');
     })->name('profile');
 
+    Route::get('post-templates/{client}',                    [GmbPostTemplateController::class, 'index'])            ->name('post-templates.index');
+    Route::get('post-templates/{client}/fetch-competitors',  [GmbPostTemplateController::class, 'fetchCompetitors']) ->name('post-templates.fetch-competitors');
+    Route::post('post-templates/{client}/generate',          [GmbPostTemplateController::class, 'generatePost'])     ->name('post-templates.generate');
+    Route::post('post-templates/{client}/store',             [GmbPostTemplateController::class, 'store'])            ->name('post-templates.store');
+    Route::post('post-templates/{client}/{post}/publish',    [GmbPostTemplateController::class, 'publish'])          ->name('post-templates.publish');
+    Route::post('post-templates/{client}/{post}/delete',     [GmbPostTemplateController::class, 'destroy'])          ->name('post-templates.destroy');
+
 });
+

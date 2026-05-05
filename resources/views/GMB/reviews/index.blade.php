@@ -100,7 +100,6 @@
                                     </td>
                                 </tr>
 
-                                {{-- Draft Panel --}}
                                 @if(!$review->reply_posted && $review->draft)
                                     <tr>
                                         <td colspan="6" class="p-0 border-0">
@@ -117,7 +116,7 @@
                                                     @endif
 
                                                     <p class="small fw-semibold mb-2">
-                                                        <i class="mdi mdi-robot-outline me-1"></i>Pick a draft, edit if needed, then save:
+                                                        <i class="mdi mdi-robot-outline me-1"></i>Pick a draft, edit if needed, then post:
                                                     </p>
 
                                                     <form method="POST" action="{{ route('gmb.reviews.select-draft', $review) }}">
@@ -147,22 +146,16 @@
                                                                   rows="3">{{ array_values($review->draft->getDraftsArray())[0] ?? '' }}</textarea>
 
                                                         <button type="submit" class="btn btn-sm btn-success">
-                                                            <i class="mdi mdi-content-save me-1"></i> Save Draft
+                                                            <i class="mdi mdi-send me-1"></i> Post Reply to Google
                                                         </button>
                                                     </form>
 
                                                     @if($review->draft->final_response)
                                                         <div class="mt-3 p-2 bg-white rounded border">
                                                             <small class="fw-semibold d-block mb-1 text-success">
-                                                                <i class="mdi mdi-check-circle me-1"></i>Final Response Ready
+                                                                <i class="mdi mdi-check-circle me-1"></i>Last Saved Response
                                                             </small>
-                                                            <small class="d-block mb-2">{{ $review->draft->final_response }}</small>
-                                                            <form method="POST" action="{{ route('gmb.reviews.mark-replied', $review) }}">
-                                                                @csrf
-                                                                <button type="submit" class="btn btn-sm btn-outline-success">
-                                                                    <i class="mdi mdi-check me-1"></i> Mark as Replied
-                                                                </button>
-                                                            </form>
+                                                            <small class="d-block text-muted">{{ $review->draft->final_response }}</small>
                                                         </div>
                                                     @endif
 
@@ -200,6 +193,8 @@
 function selectDraft(reviewId, draftNum, btn) {
     document.getElementById('selected_draft_' + reviewId).value = draftNum;
     document.getElementById('final_response_' + reviewId).value = btn.getAttribute('data-text');
+    btn.closest('ul').querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+    btn.classList.add('active');
 }
 </script>
 @endpush

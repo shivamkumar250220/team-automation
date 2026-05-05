@@ -80,19 +80,26 @@ class GmbInsightController extends Controller
         $locations = GmbLocation::where('client_id', $client->id)->active()->get();
 
         if ($locations->isEmpty()) {
+            Log::warning("No active locations for client {$client->id}");
             return false;
         }
 
-        // ── Try to get OAuth token (optional — used for performance metrics) ──
-        $token = null;
-
         $credential = GmbApiCredential::where('client_id', $client->id)->first();
 
-        if ($credential) {
-            if ($credential->isExpired()) {
-                $credential = $this->refreshCredential($credential);
-            }
-            $token = $credential?->access_token;
+        if (!$credential) {
+            Log::warning("No credentials for client {$client->id}");
+            return false;
+        }
+
+        if ($credential->isExpired()) {
+            $credential = $this->refreshCredential($credential);
+        }
+
+        $token = $credential?->access_token;
+
+        if (!$token) {
+            Log::warning("No valid token for client {$client->id}");
+            return false;
         }
 
         $anySuccess = false;
@@ -109,40 +116,24 @@ class GmbInsightController extends Controller
         return $anySuccess;
     }
 
-    private function fetchAndSave(GmbLocation $location, ?string $token): void
+    private function fetchAndSave(GmbLocation $location, string $token): void
     {
         $month = now()->month;
         $year  = now()->year;
 
-        // ── Step 1: Always fetch public data from SerpAPI ──────────────────
-        $serpData = $this->fetchSerpApiData($location);
-
-        // ── Step 2: Fetch performance metrics via OAuth (if token available) ─
+        $basicData         = $this->fetchLocationBasicInfo($location, $token);
         $views             = 0;
         $calls             = 0;
         $directionRequests = 0;
         $searchQueries     = [];
 
-        if ($token && !empty($location->gbp_location_id)) {
-            try {
-                [$views, $calls, $directionRequests] = $this->fetchPerformanceMetrics($location, $token, $month, $year);
-                $searchQueries = $this->fetchSearchQueries($location, $token, $month, $year);
-            } catch (\Exception $e) {
-                $isQuotaError = str_contains($e->getMessage(), '429')
-                    || str_contains($e->getMessage(), 'RATE_LIMIT_EXCEEDED')
-                    || str_contains($e->getMessage(), 'RESOURCE_EXHAUSTED')
-                    || str_contains($e->getMessage(), 'Quota exceeded');
-
-                if ($isQuotaError) {
-                    Log::warning("GBP API quota exceeded for location {$location->id}. Performance metrics skipped. Fix: https://console.cloud.google.com/apis/api/businessprofileperformance.googleapis.com/quotas");
-                } else {
-                    Log::warning("OAuth performance fetch skipped for location {$location->id}: {$e->getMessage()}");
-                }
-                // SerpAPI data (rating, review_count) still saves below
-            }
+        try {
+            [$views, $calls, $directionRequests] = $this->fetchPerformanceMetrics($location, $token, $month, $year);
+            $searchQueries = $this->fetchSearchQueries($location, $token, $month, $year);
+        } catch (\Exception $e) {
+            Log::warning("Performance fetch skipped for location {$location->id}: {$e->getMessage()}");
         }
 
-        // ── Step 3: Save / update insight record ───────────────────────────
         GmbInsight::updateOrCreate(
             [
                 'gmb_location_id' => $location->id,
@@ -150,53 +141,39 @@ class GmbInsightController extends Controller
                 'year'            => $year,
             ],
             [
-                // From SerpAPI (public data — always available)
-                'rating'             => $serpData['rating'] ?? null,
-                'review_count'       => $serpData['review_count'] ?? null,
-
-                // From Google OAuth (private metrics — only if token exists)
+                'rating'             => $basicData['rating'] ?? null,
+                'review_count'       => $basicData['review_count'] ?? null,
                 'views'              => $views,
                 'calls'              => $calls,
                 'direction_requests' => $directionRequests,
                 'search_queries'     => $searchQueries,
-
                 'pulled_at'          => now(),
             ]
         );
     }
 
-    // ── SerpAPI: fetch public business data (rating, review count) ──────────
-    private function fetchSerpApiData(GmbLocation $location): array
+    private function fetchLocationBasicInfo(GmbLocation $location, string $token): array
     {
-        $apiKey  = env('SERPAPI_KEY');
-        $placeId = $location->google_place_id ?? null;
+        $locationId = $this->resolveLocationId($location->gbp_location_id);
 
-        if (empty($placeId)) {
-            Log::warning("GmbLocation {$location->id} has no google_place_id — skipping SerpAPI fetch.");
-            return [];
-        }
-
-        $response = Http::get('https://serpapi.com/search', [
-            'engine'   => 'google_maps',
-            'place_id' => $placeId,
-            'api_key'  => $apiKey,
-            'hl'       => 'en',
-        ]);
+        $response = Http::withToken($token)
+            ->get("https://mybusinessbusinessinformation.googleapis.com/v1/{$locationId}", [
+                'readMask' => 'name,title,rating,userRatingCount',
+            ]);
 
         if ($response->failed()) {
-            Log::error("SerpAPI insight fetch failed for location {$location->id}: " . $response->body());
+            Log::warning("Basic info fetch failed for location {$location->id}: " . $response->body());
             return [];
         }
 
-        $place = $response->json('place_results') ?? [];
+        $data = $response->json();
 
         return [
-            'rating'       => $place['rating'] ?? null,
-            'review_count' => $place['reviews'] ?? null,
+            'rating'       => $data['rating'] ?? null,
+            'review_count' => $data['userRatingCount'] ?? null,
         ];
     }
 
-    // ── Google OAuth: fetch views, calls, direction requests ────────────────
     private function fetchPerformanceMetrics(GmbLocation $location, string $token, int $month, int $year): array
     {
         $locationId = $this->resolveLocationId($location->gbp_location_id);
@@ -221,32 +198,13 @@ class GmbInsightController extends Controller
             throw new \Exception("Performance API failed: " . $response->body());
         }
 
-        $data = $response->json();
-
-        $views = $this->sumMetric($data, 'BUSINESS_IMPRESSIONS_DESKTOP_MAPS')
-               + $this->sumMetric($data, 'BUSINESS_IMPRESSIONS_MOBILE_MAPS');
-
+        $data              = $response->json();
+        $views             = $this->sumMetric($data, 'BUSINESS_IMPRESSIONS_DESKTOP_MAPS')
+                           + $this->sumMetric($data, 'BUSINESS_IMPRESSIONS_MOBILE_MAPS');
         $calls             = $this->sumMetric($data, 'CALL_CLICKS');
         $directionRequests = $this->sumMetric($data, 'BUSINESS_DIRECTION_REQUESTS');
 
         return [$views, $calls, $directionRequests];
-    }
-
-    private function resolveLocationId(string $raw): string
-    {
-        $raw = trim($raw);
-        return str_starts_with($raw, 'locations/') ? $raw : 'locations/' . $raw;
-    }
-
-    private function sumMetric(array $data, string $metric): int
-    {
-        $series = collect($data['multiDailyMetricTimeSeries'] ?? [])
-            ->first(fn($s) => $s['dailyMetric'] === $metric);
-
-        if (!$series) return 0;
-
-        return collect($series['timeSeries']['datedValues'] ?? [])
-            ->sum(fn($p) => (int) ($p['value'] ?? 0));
     }
 
     private function fetchSearchQueries(GmbLocation $location, string $token, int $month, int $year): array
@@ -270,6 +228,23 @@ class GmbInsightController extends Controller
                 'impressions' => $k['insightsValue']['value'] ?? 0,
             ])
             ->toArray();
+    }
+
+    private function resolveLocationId(string $raw): string
+    {
+        $raw = trim($raw);
+        return str_starts_with($raw, 'locations/') ? $raw : 'locations/' . $raw;
+    }
+
+    private function sumMetric(array $data, string $metric): int
+    {
+        $series = collect($data['multiDailyMetricTimeSeries'] ?? [])
+            ->first(fn($s) => $s['dailyMetric'] === $metric);
+
+        if (!$series) return 0;
+
+        return collect($series['timeSeries']['datedValues'] ?? [])
+            ->sum(fn($p) => (int) ($p['value'] ?? 0));
     }
 
     private function refreshCredential(GmbApiCredential $credential): ?GmbApiCredential

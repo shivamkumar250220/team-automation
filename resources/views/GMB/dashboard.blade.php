@@ -86,6 +86,21 @@
                                                 Citation Scan
                                             </a>
                                         </li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ route('gmb.review-alerts.index', $client->id) }}">
+                                                Review Alerts
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ route('gmb.competitors.index', $client->id) }}">
+                                                Competitor Tracker
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ route('post-templates.index', $client->id) }}">
+                                                Post Templates
+                                            </a>
+                                        </li>
                                     </ul>
                                 </div>
                             </td>

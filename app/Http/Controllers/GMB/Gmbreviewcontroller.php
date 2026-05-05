@@ -91,7 +91,31 @@ class GmbReviewController extends Controller
             ]
         );
 
-        return back()->with('success', 'Draft saved. You can now post it to GMB.');
+        $credential = GmbApiCredential::where('client_id', $review->client_id)->first();
+
+        if (!$credential) {
+            return back()->with('warning', 'Draft saved, but no API credentials found — reply not posted to Google.');
+        }
+
+        try {
+            $token  = $this->google->getValidToken($credential);
+            $posted = $this->google->postReply($review->location, $review->review_id, $request->final_response, $token);
+        } catch (\Exception $e) {
+            Log::error("GMB reply post failed for review {$review->id}: " . $e->getMessage());
+            return back()->with('warning', 'Draft saved, but reply could not be posted: ' . $e->getMessage());
+        }
+
+        if ($posted) {
+            $review->update([
+                'reply_posted' => true,
+                'reply_text'   => $request->final_response,
+                'reply_time'   => now(),
+            ]);
+
+            return back()->with('success', 'Reply posted to Google successfully!');
+        }
+
+        return back()->with('warning', 'Draft saved, but Google rejected the reply. Check logs for details.');
     }
 
     public function markReplied(GmbReview $review)
@@ -182,6 +206,7 @@ class GmbReviewController extends Controller
                 'review_time'     => isset($raw['createTime']) ? Carbon::parse($raw['createTime']) : null,
                 'reply_text'      => $raw['reviewReply']['comment'] ?? null,
                 'reply_time'      => isset($raw['reviewReply']['updateTime']) ? Carbon::parse($raw['reviewReply']['updateTime']) : null,
+                'reply_posted'    => isset($raw['reviewReply']['comment']),
             ]);
 
             $pulled++;
@@ -212,37 +237,48 @@ class GmbReviewController extends Controller
         return [$pulled, $generated];
     }
 
+    /**
+     * ✅ FIXED: Correct URL = accounts/{accountId}/locations/{locationId}/reviews
+     * 
+     * DB mein gbp_location_id sirf numeric ID store hai (e.g. 10098755641242957179)
+     * resolveId() usse "locations/10098755641242957179" bana deta hai
+     * Same for gbp_account_id → "accounts/123456789"
+     */
     private function fetchReviews(GmbLocation $location, string $token): array
     {
-        $apiKey  = env('SERPAPI_KEY');
-        $placeId = $location->google_place_id ?? null;
+        $accountId  = $this->resolveId($location->gbp_account_id, 'accounts');
+        $locationId = $this->resolveId($location->gbp_location_id, 'locations');
 
-        if (empty($placeId)) {
-            Log::error("GmbLocation {$location->id} has no google_place_id.");
-            return [];
-        }
+        $allReviews = [];
+        $pageToken  = null;
 
-        $response = Http::get('https://serpapi.com/search', [
-            'engine'   => 'google_maps_reviews',
-            'place_id' => $placeId,
-            'api_key'  => $apiKey,
-            'hl'       => 'en',
-        ]);
+        do {
+            $params = ['pageSize' => 50];
 
-        if ($response->failed()) {
-            Log::error("SerpAPI error for location {$location->id}: " . $response->body());
-            return [];
-        }
+            if ($pageToken) {
+                $params['pageToken'] = $pageToken;
+            }
 
-        return array_map(fn($r) => [
-            'name'        => 'reviews/' . md5(($r['user']['name'] ?? '') . ($r['date'] ?? '')),
-            'reviewer'    => ['displayName' => $r['user']['name'] ?? 'Anonymous'],
-            'starRating'  => match((int)($r['rating'] ?? 5)) {
-                1 => 'ONE', 2 => 'TWO', 3 => 'THREE', 4 => 'FOUR', default => 'FIVE'
-            },
-            'comment'     => $r['snippet'] ?? null,
-            'createTime'  => $r['iso_date'] ?? now()->toISOString(),
-            'reviewReply' => isset($r['response']) ? ['comment' => $r['response']['snippet']] : null,
-        ], $response->json('reviews') ?? []);
+            $response = Http::withToken($token)
+                ->get("https://mybusiness.googleapis.com/v4/{$accountId}/{$locationId}/reviews", $params);
+
+            if ($response->failed()) {
+                Log::error("GBP reviews fetch failed for location {$location->id}: " . $response->body());
+                break;
+            }
+
+            $data       = $response->json();
+            $allReviews = array_merge($allReviews, $data['reviews'] ?? []);
+            $pageToken  = $data['nextPageToken'] ?? null;
+
+        } while ($pageToken);
+
+        return $allReviews;
+    }
+
+    private function resolveId(string $raw, string $prefix): string
+    {
+        $raw = trim($raw);
+        return str_starts_with($raw, $prefix . '/') ? $raw : $prefix . '/' . $raw;
     }
 }

@@ -19,7 +19,6 @@ class GmbLocation extends Model
         'status',
     ];
 
-    // ── Relations ──────────────────────────────
 
     public function client()
     {

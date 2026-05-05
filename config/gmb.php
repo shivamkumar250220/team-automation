@@ -43,4 +43,11 @@ return [
 
     'gemini_api_key' => env('GEMINI_API_KEY'),
 
+    'tl_email' => env('GMB_TL_EMAIL', 'shivam@ichelonconsulting.com'),
+    
+    'google_places_api_key' => env('GMB_PLACES_API_KEY'),
+
+    'serpapi_key' => env('SERPAPI_KEY'),
+
+
 ];
