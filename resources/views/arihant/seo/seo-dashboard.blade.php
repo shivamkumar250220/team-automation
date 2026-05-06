@@ -740,7 +740,7 @@
             <div class="alert alert-danger alert-dismissible fade show mb-0" role="alert">
                 <i class="mdi mdi-alert-circle me-2"></i>
                 <span id="liveErrorMessage">An error occurred.</span>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close" onclick="document.getElementById('liveErrorSection').style.display='none';"></button>
             </div>
         </div>
 
@@ -1106,6 +1106,7 @@ const CLIENT_PROPERTY_ID = {{ $client_property_id }};
 const RANKING_FORM_URL  = '{{ route("ranking.competitor.report.form", [$created_by_user_id, $client_property_id]) }}';
 const RANKING_SAVE_URL  = '{{ route("ranking.competitor.report.save") }}';
 const CWV_FORM_URL      = '{{ route("core.web.vitals.form",           [$created_by_user_id, $client_property_id]) }}';
+// const WA_FORM_URL      = '{{ route("website.health.audit", [$domain]) }}';
 const REPORTING_FORM_URL= '{{ route("reporting.sheet.form",           [$created_by_user_id, $client_property_id]) }}';
 let competitorAuditCache = {};
 // All saved reports (keyed by id)
@@ -1706,7 +1707,7 @@ document.getElementById('cwvForm').addEventListener('submit', async function(e) 
         document.getElementById('c_resultsSection').style.display = 'block';
         document.getElementById('c_resultsSection').scrollIntoView({ behavior:'smooth' });
     } catch(err) {
-        showLiveError('Network error: ' + err.message);
+        showLiveError('Network error: ' + (err.message ?? JSON.stringify(err)));
     } finally {
         cSetLoading(false);
     }
@@ -1732,6 +1733,50 @@ function cSetLoading(on) {
     document.getElementById('c_generateBtnSpinner').classList.toggle('d-none', !on);
     document.getElementById('c_generateBtnText').textContent = on ? 'Analysing…' : 'Analyse Web Vitals';
 }
+let waAllData = {};
+
+document.getElementById('waForm').addEventListener('submit', async function(e) {
+    
+    e.preventDefault();
+    const input = document.getElementById('wa_ourclientInput');
+    if (!input.value.trim()) { 
+        input.classList.add('is-invalid'); 
+        return; 
+    }
+    input.classList.remove('is-invalid');
+    waSetLoading(true);
+    document.getElementById('liveErrorSection').style.display = 'none';
+    document.getElementById('wa_resultsSection').style.display = 'none';
+    let domain = input.value.trim();
+    domain = domain.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+    // input.value = domain;
+    console.log(domain);
+    // let domain = input.value.trim();
+    
+    try {
+        const resp = await fetch('/website-health-audit/' + encodeURIComponent(domain), {
+            method:'POST',
+            headers:{'X-CSRF-TOKEN':CSRF,'Accept':'application/json'},
+            body: JSON.stringify({ domain: domain })
+        });
+        const json = await resp.json();
+        
+        if (!resp.ok || !json.success) {
+            showLiveError(json.message || 'An unexpected error occurred.');
+            return;
+        }
+        
+        waAllData = json;
+        renderWebsiteAuditResults(json);
+        document.getElementById('wa_resultsSection').style.display = 'block';
+        document.getElementById('wa_resultsSection').scrollIntoView({ behavior: 'smooth' });
+    } catch(err) {
+        console.error('Fetch error:', err);
+        showLiveError('Network error: ' + err.message);
+    } finally {
+        waSetLoading(false);
+    }
+});
 
 /* ══════════════════════════════════════════════════════════════════
    FORM: REPORTING SHEET — Submit
@@ -2343,9 +2388,26 @@ function exportActivePaneCsv(contentId) {
    SHARED HELPERS
    ══════════════════════════════════════════════════════════════════ */
 function showLiveError(msg) {
-    console.log(msg);
-    document.getElementById('liveErrorMessage').textContent = msg;
-    document.getElementById('liveErrorSection').style.display = 'block';
+    console.error(msg);
+    const msgEl     = document.getElementById('liveErrorMessage');
+    const sectionEl = document.getElementById('liveErrorSection');
+    if (!msgEl || !sectionEl) {
+        // Elements missing — re-inject the banner into the page
+        const banner = document.createElement('div');
+        banner.id = 'liveErrorSection';
+        banner.className = 'mb-3';
+        banner.innerHTML = `
+            <div class="alert alert-danger alert-dismissible fade show mb-0" role="alert">
+                <i class="mdi mdi-alert-circle me-2"></i>
+                <span id="liveErrorMessage">${msg}</span>
+                <button type="button" class="btn-close" onclick="this.closest('#liveErrorSection').style.display='none';"></button>
+            </div>`;
+        const anchor = document.getElementById('viewNewAudit') || document.body;
+        anchor.prepend(banner);
+        return;
+    }
+    msgEl.textContent = msg;
+    sectionEl.style.display = 'block';
 }
 function posClass(pos) { if(!pos) return 'pos-other'; if(pos<=3) return 'pos-top3'; if(pos<=10) return 'pos-top10'; return 'pos-other'; }
 function extractDomain(url) { try { return new URL(url).hostname.replace('www.',''); } catch { return '—'; } }
@@ -2367,52 +2429,7 @@ function escapeHtml(str) {
 /* ══════════════════════════════════════════════════════════════════
    FORM: WEBSITE AUDIT — Submit
    ══════════════════════════════════════════════════════════════════ */
-let waAllData = {};
 
-document.getElementById('waForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const input = document.getElementById('wa_ourclientInput');
-    if (!input.value.trim()) { 
-        input.classList.add('is-invalid'); 
-        return; 
-    }
-    input.classList.remove('is-invalid');
-    waSetLoading(true);
-    document.getElementById('liveErrorSection').style.display = 'none';
-    document.getElementById('wa_resultsSection').style.display = 'none';
-    let domain = input.value.trim();
-    domain = domain.replace(/^https?:\/\//i, '').replace(/\/$/, '');
-    // input.value = domain;
-    console.log(input.value);
-    // let domain = input.value.trim();
-    
-    try {
-        const resp = await fetch(`/website-health-audit/${encodeURIComponent(domain)}`, {
-            method: 'GET',
-            headers: {
-                'X-CSRF-TOKEN': CSRF,
-                'Accept': 'application/json',
-            }
-        });
-        
-        const json = await resp.json();
-        
-        if (!resp.ok || !json.success) {
-            showLiveError(json.message || 'An unexpected error occurred.');
-            return;
-        }
-        
-        waAllData = json;
-        renderWebsiteAuditResults(json);
-        document.getElementById('wa_resultsSection').style.display = 'block';
-        document.getElementById('wa_resultsSection').scrollIntoView({ behavior: 'smooth' });
-    } catch(err) {
-        console.error('Fetch error:', err);
-        showLiveError('Network error: ' + err.message);
-    } finally {
-        waSetLoading(false);
-    }
-});
 
 document.getElementById('wa_resetBtn').addEventListener('click', function() {
     document.getElementById('wa_resultsSection').style.display = 'none';
@@ -2484,11 +2501,6 @@ function renderWebsiteAuditResults(data) {
                     <i class="mdi mdi-speedometer me-1"></i> PageSpeed Insights
                 </button>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="wa-tab-raw" data-bs-toggle="tab" data-bs-target="#wa-pane-raw" type="button" role="tab">
-                    <i class="mdi mdi-code-json me-1"></i> JSON Raw Data
-                </button>
-            </li>
         </ul>
         
         <div class="tab-content border border-top-0 rounded-bottom p-3 bg-white" id="waMainContent">
@@ -2500,13 +2512,6 @@ function renderWebsiteAuditResults(data) {
             <!-- PageSpeed Insights Tab -->
             <div class="tab-pane fade" id="wa-pane-pagespeed" role="tabpanel">
                 ${renderPageSpeedTab(pagespeed, domain)}
-            </div>
-            
-            <!-- JSON Raw Data Tab -->
-            <div class="tab-pane fade" id="wa-pane-raw" role="tabpanel">
-                <div class="bg-dark rounded p-3" style="max-height: 600px; overflow-y: auto;">
-                    ${renderJson(data)}
-                </div>
             </div>
         </div>
     </div>`;
@@ -3040,19 +3045,21 @@ function renderCompetitorAuditModal(auditData, url, title) {
             </button>
         </div>`;
     }
-    if (auditData.error_message ) {
+    
+    const data = auditData.data;
+
+    
+    if (data.error_message ) {
         return `
         <div class="text-center py-5">
             <i class="mdi mdi-alert-circle text-danger" style="font-size: 3rem;"></i>
             <h5 class="mt-3">Audit Failed</h5>
-            <p class="text-muted">${auditData?.error_message || 'Unable to fetch audit data for this competitor.'}</p>
+            <p class="text-muted">${data?.error_message || 'Unable to fetch audit data for this competitor.'}</p>
             <button class="btn btn-sm btn-outline-primary mt-2" onclick="fetchCompetitorAudit('${escapeHtml(url)}').then(() => openCompetitorAuditModal('${escapeHtml(url)}', '${escapeHtml(title)}'))">
                 <i class="mdi mdi-refresh me-1"></i> Retry
             </button>
         </div>`;
     }
-    
-    const data = auditData.data;
     const overallScore = data.overall_score || 0;
     const categoryScores = data.category_scores || {};
     const counts = data.counts || { passed: 0, warning: 0, failed: 0, critical: 0 };

@@ -210,20 +210,35 @@ class SEOAutomationController extends Controller
         $apiKey = env('PAGESPEED_API_KEY');
         $results = [];
 
+        
+        $categories = ['performance', 'accessibility', 'best-practices', 'seo'];
+
         foreach (['mobile', 'desktop'] as $strategy) {
-            $query = http_build_query([
+            $queryParams = [
                 'url'      => $url,
                 'key'      => $apiKey,
                 'strategy' => $strategy,
-            ]) . '&category=performance&category=accessibility&category=best-practices&category=seo';
+            ];
 
-            $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?' . $query;
+            // Manually append categories (important)
+            $queryString = http_build_query($queryParams);
 
-            $response = Http::timeout(60)->get($apiUrl);
+            foreach ($categories as $category) {
+                $queryString .= '&category=' . urlencode($category);
+            }
+
+            $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?' . $queryString;
+            Log::info($apiUrl);
+
+            $response = Http::timeout(120)->get($apiUrl);
+            // dd($response->body());
 
             if ($response->failed()) {
+                $body = $response->json();
+                $googleMessage = $body['error']['message'] ?? $body['error']['errors'][0]['message'] ?? null;
                 return response()->json([
-                    'error' => 'PageSpeed API request failed for strategy: ' . $strategy . ' — ' . $response->status(),
+                    'error' => 'PageSpeed API request failed for strategy: ' . $strategy . ' — ' . $response->status()
+                            . ($googleMessage ? ': ' . $googleMessage : ''),
                 ], 502);
             }
 
@@ -288,251 +303,476 @@ class SEOAutomationController extends Controller
     }
 
     public function reportingSheetForm(Request $request)
-{
-    $request->validate([
-        'ourclient'          => 'required|string',
-        'created_by_user_id' => 'required|integer',
-        'client_property_id' => 'required|integer',
-        'spreadsheet_url'    => 'required|string',
-        'xml_files'          => 'nullable|array',
-        'xml_files.*'        => 'nullable|file|mimetypes:text/xml,application/xml,text/plain|max:10240',
-    ]);
+    {
+        $request->validate([
+            'ourclient'          => 'required|string',
+            'created_by_user_id' => 'required|integer',
+            'client_property_id' => 'required|integer',
+            'spreadsheet_url'    => 'required|string',
+            'xml_files'          => 'nullable|array',
+            'xml_files.*'        => 'nullable|file|mimetypes:text/xml,application/xml,text/plain|max:10240',
+        ]);
 
-    $domain          = $request->input('ourclient');
-    $spreadsheetUrl  = trim($request->input('spreadsheet_url'));
+        $domain          = $request->input('ourclient');
+        $spreadsheetUrl  = trim($request->input('spreadsheet_url'));
 
-    // ── Extract spreadsheet ID from the URL ─────────────────────────────────
-    // Supports: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
-    //           https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/
-    if (!preg_match('/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/', $spreadsheetUrl, $matches)) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Could not extract a spreadsheet ID from the provided URL. Please check the link.',
-        ], 422);
-    }
-
-    $spreadsheetId = $matches[1];
-
-    // ── Sheet definitions ─────────────────────────────────────────────────────
-    $sheetDefinitions = [
-        [
-            'name'    => '404',
-            'headers' => ['S.No.', 'Link From', 'URL', 'Status Code', 'Link On Text', 'Comments', 'Status'],
-        ],
-        [
-            'name'    => 'Duplicate H1',
-            'headers' => ['S.No.', 'Page URL', 'Error', 'Existing H1', 'Recommended H1', 'Comments', 'Status'],
-        ],
-        [
-            'name'    => 'Multiple H1',
-            'headers' => ['S.No.', 'Page URL', 'Error', 'H1 Count', 'Comments', 'Status'],
-        ],
-        [
-            'name'    => 'Missing Alt Text',
-            'headers' => ['S.No.', 'Link From', 'URL', 'Error', 'Recommended Alt Text', 'Comments', 'Date'],
-        ],
-        [
-            'name'    => 'Oversize Images',
-            'headers' => ['S.No', 'Link From', 'URL', 'Size', 'Compressed Image', 'Recommendation', 'Comments'],
-        ],
-        [
-            'name'    => 'Page Speed',
-            'headers' => [],
-        ],
-    ];
-
-    try {
-        $client        = $this->getGoogleClient();
-        $sheetsService = new Sheets($client);
-
-        // ── Get the existing spreadsheet ────────────────────────────────────────────
-        $spreadsheet = $sheetsService->spreadsheets->get($spreadsheetId);
-        
-        // ── Get existing sheets ─────────────────────────────────────────────────────
-        $existingSheets = $spreadsheet->getSheets();
-        $batchUpdateRequests = [];
-
-        // Build a map of existing sheet titles => sheetId
-        $existingSheetTitles = [];
-        foreach ($existingSheets as $sheet) {
-            $props = $sheet->getProperties();
-            $existingSheetTitles[$props->getTitle()] = $props->getSheetId();
+        // ── Extract spreadsheet ID from the URL ─────────────────────────────────
+        // Supports: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
+        //           https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/
+        if (!preg_match('/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/', $spreadsheetUrl, $matches)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not extract a spreadsheet ID from the provided URL. Please check the link.',
+            ], 422);
         }
 
-        // ── Ensure "Dashboard" tab exists ──────────────────────────────────────────
-        // Case 1: "Dashboard" already exists → nothing to do (we'll clear & rewrite it later)
-        // Case 2: "Sheet1" exists → rename it to "Dashboard"
-        // Case 3: Neither exists → create a new "Dashboard" tab
-        if (!array_key_exists('Dashboard', $existingSheetTitles)) {
-            if (array_key_exists('Sheet1', $existingSheetTitles)) {
-                // Rename Sheet1 → Dashboard
-                $batchUpdateRequests[] = new SheetsRequest([
-                    'updateSheetProperties' => [
-                        'properties' => [
-                            'sheetId' => $existingSheetTitles['Sheet1'],
-                            'title'   => 'Dashboard',
-                        ],
-                        'fields' => 'title',
-                    ],
-                ]);
-            } else {
-                // Create a brand-new Dashboard tab at position 0
-                $batchUpdateRequests[] = new SheetsRequest([
-                    'addSheet' => [
-                        'properties' => [
-                            'title' => 'Dashboard',
-                            'index' => 0,
-                            'gridProperties' => [
-                                'rowCount'    => 100,
-                                'columnCount' => 3,
-                            ],
-                        ],
-                    ],
-                ]);
-            }
-        }
+        $spreadsheetId = $matches[1];
 
-        // ── Create any missing data tabs ────────────────────────────────────────────
-        foreach ($sheetDefinitions as $def) {
-            if (isset($def['note']) || isset($def['docType'])) {
-                continue;
-            }
+        // ── Sheet definitions ─────────────────────────────────────────────────────
+        $sheetDefinitions = [
+            [
+                'name'    => '404',
+                'headers' => ['S.No.', 'Link From', 'URL', 'Status Code', 'Link On Text', 'Comments', 'Status'],
+            ],
+            [
+                'name'    => 'Duplicate H1',
+                'headers' => ['S.No.', 'Page URL', 'Error', 'Existing H1', 'Recommended H1', 'Comments', 'Status'],
+            ],
+            [
+                'name'    => 'Multiple H1',
+                'headers' => ['S.No.', 'Page URL', 'Error', 'H1 Count', 'Comments', 'Status'],
+            ],
+            [
+                'name'    => 'Missing Alt Text',
+                'headers' => ['S.No.', 'Link From', 'URL', 'Error', 'Recommended Alt Text', 'Comments', 'Date'],
+            ],
+            [
+                'name'    => 'Oversize Images',
+                'headers' => ['S.No', 'Link From', 'URL', 'Size', 'Compressed Image', 'Recommendation', 'Comments'],
+            ],
+            [
+                'name'    => 'Page Speed',
+                'headers' => [],
+            ],
+        ];
 
-            if (!array_key_exists($def['name'], $existingSheetTitles)) {
-                $batchUpdateRequests[] = new SheetsRequest([
-                    'addSheet' => [
-                        'properties' => [
-                            'title' => $def['name'],
-                            'gridProperties' => [
-                                'rowCount'    => 1000,
-                                'columnCount' => 10,
-                            ],
-                        ],
-                    ],
-                ]);
-            }
-        }
+        try {
+            $client        = $this->getGoogleClient();
+            $sheetsService = new Sheets($client);
 
-        // ── Execute all add/rename requests BEFORE refreshing sheet IDs ────────────
-        if (!empty($batchUpdateRequests)) {
-            $sheetsService->spreadsheets->batchUpdate(
-                $spreadsheetId,
-                new BatchUpdateSpreadsheetRequest(['requests' => $batchUpdateRequests])
-            );
-        }
-
-        // ── Refresh spreadsheet data to get up-to-date sheet IDs ───────────────────
-        $updatedSpreadsheet = $sheetsService->spreadsheets->get($spreadsheetId);
-        $tabSheetIds = [];
-        
-        foreach ($updatedSpreadsheet->getSheets() as $sheet) {
-            $props = $sheet->getProperties();
-            $tabSheetIds[$props->getTitle()] = $props->getSheetId();
-        }
-
-        // ── Write header rows into each error tab and style them ────────────────────
-        $headerRequests = [];
-
-        foreach ($sheetDefinitions as $def) {
-            if (isset($def['note']) || isset($def['docType'])) {
-                continue;
-            }
-
-            $tabName = $def['name'];
-            $headers = $def['headers'] ?? [$tabName];
-            $sheetId = $tabSheetIds[$tabName] ?? null;
-
-            if (!$sheetId) {
-                continue;
-            }
-
-            // Clear existing content in the sheet (optional - to start fresh)
-            // Get current sheet data to find last row
-            $lastRowResponse = $sheetsService->spreadsheets_values->get(
-                $spreadsheetId,
-                $tabName . '!A:Z'
-            );
-            $existingValues = $lastRowResponse->getValues();
+            // ── Get the existing spreadsheet ────────────────────────────────────────────
+            $spreadsheet = $sheetsService->spreadsheets->get($spreadsheetId);
             
-            if (!empty($existingValues)) {
-                // Clear all existing content
-                $lastRow = count($existingValues);
-                $sheetsService->spreadsheets_values->clear(
+            // ── Get existing sheets ─────────────────────────────────────────────────────
+            $existingSheets = $spreadsheet->getSheets();
+            $batchUpdateRequests = [];
+
+            // Build a map of existing sheet titles => sheetId
+            $existingSheetTitles = [];
+            foreach ($existingSheets as $sheet) {
+                $props = $sheet->getProperties();
+                $existingSheetTitles[$props->getTitle()] = $props->getSheetId();
+            }
+
+            // ── Ensure "Dashboard" tab exists ──────────────────────────────────────────
+            // Case 1: "Dashboard" already exists → nothing to do (we'll clear & rewrite it later)
+            // Case 2: "Sheet1" exists → rename it to "Dashboard"
+            // Case 3: Neither exists → create a new "Dashboard" tab
+            if (!array_key_exists('Dashboard', $existingSheetTitles)) {
+                if (array_key_exists('Sheet1', $existingSheetTitles)) {
+                    // Rename Sheet1 → Dashboard
+                    $batchUpdateRequests[] = new SheetsRequest([
+                        'updateSheetProperties' => [
+                            'properties' => [
+                                'sheetId' => $existingSheetTitles['Sheet1'],
+                                'title'   => 'Dashboard',
+                            ],
+                            'fields' => 'title',
+                        ],
+                    ]);
+                } else {
+                    // Create a brand-new Dashboard tab at position 0
+                    $batchUpdateRequests[] = new SheetsRequest([
+                        'addSheet' => [
+                            'properties' => [
+                                'title' => 'Dashboard',
+                                'index' => 0,
+                                'gridProperties' => [
+                                    'rowCount'    => 100,
+                                    'columnCount' => 3,
+                                ],
+                            ],
+                        ],
+                    ]);
+                }
+            }
+
+            // ── Create any missing data tabs ────────────────────────────────────────────
+            foreach ($sheetDefinitions as $def) {
+                if (isset($def['note']) || isset($def['docType'])) {
+                    continue;
+                }
+
+                if (!array_key_exists($def['name'], $existingSheetTitles)) {
+                    $batchUpdateRequests[] = new SheetsRequest([
+                        'addSheet' => [
+                            'properties' => [
+                                'title' => $def['name'],
+                                'gridProperties' => [
+                                    'rowCount'    => 1000,
+                                    'columnCount' => 10,
+                                ],
+                            ],
+                        ],
+                    ]);
+                }
+            }
+
+            // ── Execute all add/rename requests BEFORE refreshing sheet IDs ────────────
+            if (!empty($batchUpdateRequests)) {
+                $sheetsService->spreadsheets->batchUpdate(
                     $spreadsheetId,
-                    $tabName . '!A1:' . $this->getColumnLetter(count($headers)) . $lastRow,
-                    new \Google\Service\Sheets\ClearValuesRequest()
+                    new BatchUpdateSpreadsheetRequest(['requests' => $batchUpdateRequests])
                 );
             }
 
-            // Write header row
-            $sheetsService->spreadsheets_values->update(
-                $spreadsheetId,
-                $tabName . '!A1',
-                new ValueRange(['values' => [$headers]]),
-                ['valueInputOption' => 'USER_ENTERED']
-            );
+            // ── Refresh spreadsheet data to get up-to-date sheet IDs ───────────────────
+            $updatedSpreadsheet = $sheetsService->spreadsheets->get($spreadsheetId);
+            $tabSheetIds = [];
+            
+            foreach ($updatedSpreadsheet->getSheets() as $sheet) {
+                $props = $sheet->getProperties();
+                $tabSheetIds[$props->getTitle()] = $props->getSheetId();
+            }
 
-            // Style the header row
-            $numCols = count($headers);
-            $headerRequests[] = $this->makeHeaderStyleRequest($sheetId, $numCols);
+            // ── Write header rows into each error tab and style them ────────────────────
+            $headerRequests = [];
 
-            // Auto-resize columns
-            $headerRequests[] = new SheetsRequest([
-                'autoResizeDimensions' => [
-                    'dimensions' => [
-                        'sheetId'    => $sheetId,
-                        'dimension'  => 'COLUMNS',
-                        'startIndex' => 0,
-                        'endIndex'   => $numCols,
-                    ],
-                ],
-            ]);
-        }
-
-        if (!empty($headerRequests)) {
-            $sheetsService->spreadsheets->batchUpdate(
-                $spreadsheetId,
-                new BatchUpdateSpreadsheetRequest(['requests' => $headerRequests])
-            );
-        }
-
-        // ── Populate the "404" sheet with broken links from PageSpeed Insights ─────
-        $brokenLinks = $this->fetch404BrokenLinks(rtrim($domain, '/'));
-
-        if (!empty($brokenLinks)) {
-            $sheetId404 = $tabSheetIds['404'] ?? null;
-
-            if ($sheetId404 !== null) {
-                // Build the value rows: [S.No., Link From, URL, Status Code, Link On Text, Comments, Status]
-                $linkRows = [];
-                foreach ($brokenLinks as $idx => $link) {
-                    $linkRows[] = [
-                        $idx + 1,
-                        $link['linkFrom'],
-                        $link['url'],
-                        (string) $link['statusCode'],
-                        $link['linkOnText'],
-                        $link['comments'],
-                        '', // Status – left blank for the team to fill in
-                    ];
+            foreach ($sheetDefinitions as $def) {
+                if (isset($def['note']) || isset($def['docType'])) {
+                    continue;
                 }
 
-                // Write data starting from row 2 (row 1 is the header)
+                $tabName = $def['name'];
+                $headers = $def['headers'] ?? [$tabName];
+                $sheetId = $tabSheetIds[$tabName] ?? null;
+
+                if (!$sheetId) {
+                    continue;
+                }
+
+                // Clear existing content in the sheet (optional - to start fresh)
+                // Get current sheet data to find last row
+                $lastRowResponse = $sheetsService->spreadsheets_values->get(
+                    $spreadsheetId,
+                    $tabName . '!A:Z'
+                );
+                $existingValues = $lastRowResponse->getValues();
+                
+                if (!empty($existingValues)) {
+                    // Clear all existing content
+                    $lastRow = count($existingValues);
+                    $sheetsService->spreadsheets_values->clear(
+                        $spreadsheetId,
+                        $tabName . '!A1:' . $this->getColumnLetter(count($headers)) . $lastRow,
+                        new \Google\Service\Sheets\ClearValuesRequest()
+                    );
+                }
+
+                // Write header row
                 $sheetsService->spreadsheets_values->update(
                     $spreadsheetId,
-                    '404!A2',
-                    new ValueRange(['values' => $linkRows]),
+                    $tabName . '!A1',
+                    new ValueRange(['values' => [$headers]]),
                     ['valueInputOption' => 'USER_ENTERED']
                 );
 
-                // Green row highlight + auto-resize to match screenshot style
-                $coloringRequests = [];
-                foreach ($linkRows as $rowIdx => $linkRow) {
-                    $sheetRowIndex = $rowIdx + 1; // 0-based; row 0 = header, data from index 1
+                // Style the header row
+                $numCols = count($headers);
+                $headerRequests[] = $this->makeHeaderStyleRequest($sheetId, $numCols);
+
+                // Auto-resize columns
+                $headerRequests[] = new SheetsRequest([
+                    'autoResizeDimensions' => [
+                        'dimensions' => [
+                            'sheetId'    => $sheetId,
+                            'dimension'  => 'COLUMNS',
+                            'startIndex' => 0,
+                            'endIndex'   => $numCols,
+                        ],
+                    ],
+                ]);
+            }
+
+            if (!empty($headerRequests)) {
+                $sheetsService->spreadsheets->batchUpdate(
+                    $spreadsheetId,
+                    new BatchUpdateSpreadsheetRequest(['requests' => $headerRequests])
+                );
+            }
+
+            // ── Populate the "404" sheet with broken links from PageSpeed Insights ─────
+            $brokenLinks = $this->fetch404BrokenLinks(rtrim($domain, '/'));
+
+            if (!empty($brokenLinks)) {
+                $sheetId404 = $tabSheetIds['404'] ?? null;
+
+                if ($sheetId404 !== null) {
+                    // Build the value rows: [S.No., Link From, URL, Status Code, Link On Text, Comments, Status]
+                    $linkRows = [];
+                    foreach ($brokenLinks as $idx => $link) {
+                        $linkRows[] = [
+                            $idx + 1,
+                            $link['linkFrom'],
+                            $link['url'],
+                            (string) $link['statusCode'],
+                            $link['linkOnText'],
+                            $link['comments'],
+                            '', // Status – left blank for the team to fill in
+                        ];
+                    }
+
+                    // Write data starting from row 2 (row 1 is the header)
+                    $sheetsService->spreadsheets_values->update(
+                        $spreadsheetId,
+                        '404!A2',
+                        new ValueRange(['values' => $linkRows]),
+                        ['valueInputOption' => 'USER_ENTERED']
+                    );
+
+                    // Green row highlight + auto-resize to match screenshot style
+                    $coloringRequests = [];
+                    foreach ($linkRows as $rowIdx => $linkRow) {
+                        $sheetRowIndex = $rowIdx + 1; // 0-based; row 0 = header, data from index 1
+                        $coloringRequests[] = new SheetsRequest([
+                            'repeatCell' => [
+                                'range' => [
+                                    'sheetId'          => $sheetId404,
+                                    'startRowIndex'    => $sheetRowIndex,
+                                    'endRowIndex'      => $sheetRowIndex + 1,
+                                    'startColumnIndex' => 0,
+                                    'endColumnIndex'   => 7,
+                                ],
+                                'cell' => [
+                                    'userEnteredFormat' => [
+                                        'backgroundColor' => [
+                                            'red'   => 0.576,  // #93c47d – same green as screenshot
+                                            'green' => 0.769,
+                                            'blue'  => 0.49,
+                                        ],
+                                    ],
+                                ],
+                                'fields' => 'userEnteredFormat.backgroundColor',
+                            ],
+                        ]);
+                    }
+
+                    // Auto-resize all 7 columns after data is written
                     $coloringRequests[] = new SheetsRequest([
+                        'autoResizeDimensions' => [
+                            'dimensions' => [
+                                'sheetId'    => $sheetId404,
+                                'dimension'  => 'COLUMNS',
+                                'startIndex' => 0,
+                                'endIndex'   => 7,
+                            ],
+                        ],
+                    ]);
+
+                    if (!empty($coloringRequests)) {
+                        $sheetsService->spreadsheets->batchUpdate(
+                            $spreadsheetId,
+                            new BatchUpdateSpreadsheetRequest(['requests' => $coloringRequests])
+                        );
+                    }
+                }
+            }
+
+
+            // ── Gemini AI: Analyse uploaded XML sitemaps ──────────────────────────────
+            // If the user uploaded XML sitemap files, send them to Gemini to detect
+            // Duplicate H1, Multiple H1, and Missing Alt Text issues.
+            $geminiResult = null;
+            if ($request->hasFile('xml_files')) {
+                $xmlContents = '';
+                foreach ($request->file('xml_files') as $xmlFile) {
+                    $xmlContents .= "\n\n<!-- Sitemap: " . $xmlFile->getClientOriginalName() . " -->\n";
+                    $xmlContents .= file_get_contents($xmlFile->getRealPath());
+                }
+
+                if (!empty(trim($xmlContents))) {
+                    try {
+                        $geminiRaw    = $this->analyzeWithGeminiSeo($domain, $xmlContents);
+                        $geminiResult = json_decode($geminiRaw, true);
+                        Log::error('Gemini API Response', [
+                            'raw_response' => $geminiRaw,
+                            'decoded_response' => $geminiResult,
+                        ]);
+                    } catch (Exception $ge) {
+                        Log::error('Gemini SEO analysis error: ' . $ge->getMessage());
+                        $geminiResult = null;
+                    }
+                }
+            }
+
+            // ── Populate "Duplicate H1" sheet from Gemini result ─────────────────────
+            if (!empty($geminiResult['duplicate_h1'])) {
+                $sheetIdDupH1 = $tabSheetIds['Duplicate H1'] ?? null;
+                if ($sheetIdDupH1 !== null) {
+                    $dupRows = [];
+                    foreach ($geminiResult['duplicate_h1'] as $idx => $item) {
+                        $h1Text = is_array($item['h1_text']) ? implode(' | ', $item['h1_text']) : ($item['h1_text'] ?? '');
+                        $dupRows[] = [
+                            $idx + 1,
+                            $item['url']         ?? '',
+                            'Duplicate H1',
+                            $h1Text,
+                            '',   // Recommended H1 – left for the team
+                            '',   // Comments
+                            '',   // Status
+                        ];
+                    }
+
+                    $sheetsService->spreadsheets_values->update(
+                        $spreadsheetId,
+                        'Duplicate H1!A2',
+                        new ValueRange(['values' => $dupRows]),
+                        ['valueInputOption' => 'USER_ENTERED']
+                    );
+
+                    $dupRequests = [];
+                    foreach ($dupRows as $rowIdx => $_) {
+                        $ri = $rowIdx + 1;
+                        $dupRequests[] = new SheetsRequest([
+                            'repeatCell' => [
+                                'range'  => ['sheetId' => $sheetIdDupH1, 'startRowIndex' => $ri, 'endRowIndex' => $ri + 1, 'startColumnIndex' => 0, 'endColumnIndex' => 7],
+                                'cell'   => ['userEnteredFormat' => ['backgroundColor' => ['red' => 1.0, 'green' => 0.898, 'blue' => 0.6]]],
+                                'fields' => 'userEnteredFormat.backgroundColor',
+                            ],
+                        ]);
+                    }
+                    $dupRequests[] = new SheetsRequest(['autoResizeDimensions' => ['dimensions' => ['sheetId' => $sheetIdDupH1, 'dimension' => 'COLUMNS', 'startIndex' => 0, 'endIndex' => 7]]]);
+                    $sheetsService->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest(['requests' => $dupRequests]));
+                }
+            }
+
+            // ── Populate "Multiple H1" sheet from Gemini result ──────────────────────
+            if (!empty($geminiResult['multiple_h1'])) {
+                $sheetIdMultiH1 = $tabSheetIds['Multiple H1'] ?? null;
+                if ($sheetIdMultiH1 !== null) {
+                    $multiRows = [];
+                    foreach ($geminiResult['multiple_h1'] as $idx => $item) {
+                        $h1List = is_array($item['h1_contents']) ? implode(' | ', $item['h1_contents']) : ($item['h1_contents'] ?? '');
+                        $multiRows[] = [
+                            $idx + 1,
+                            $item['url']           ?? '',
+                            'Multiple H1',
+                            $item['total_h1_tags'] ?? '',
+                            $h1List,
+                            '',   // Existing H2 – left for the team
+                            '',   // Comments
+                            '',   // Status
+                        ];
+                    }
+
+                    $sheetsService->spreadsheets_values->update(
+                        $spreadsheetId,
+                        'Multiple H1!A2',
+                        new ValueRange(['values' => $multiRows]),
+                        ['valueInputOption' => 'USER_ENTERED']
+                    );
+
+                    $multiRequests = [];
+                    foreach ($multiRows as $rowIdx => $_) {
+                        $ri = $rowIdx + 1;
+                        $multiRequests[] = new SheetsRequest([
+                            'repeatCell' => [
+                                'range'  => ['sheetId' => $sheetIdMultiH1, 'startRowIndex' => $ri, 'endRowIndex' => $ri + 1, 'startColumnIndex' => 0, 'endColumnIndex' => 8],
+                                'cell'   => ['userEnteredFormat' => ['backgroundColor' => ['red' => 1.0, 'green' => 0.851, 'blue' => 0.4]]],
+                                'fields' => 'userEnteredFormat.backgroundColor',
+                            ],
+                        ]);
+                    }
+                    $multiRequests[] = new SheetsRequest(['autoResizeDimensions' => ['dimensions' => ['sheetId' => $sheetIdMultiH1, 'dimension' => 'COLUMNS', 'startIndex' => 0, 'endIndex' => 8]]]);
+                    $sheetsService->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest(['requests' => $multiRequests]));
+                }
+            }
+
+            // ── Populate "Missing Alt Text" sheet from Gemini result ─────────────────
+            if (!empty($geminiResult['missing_alt_text_images'])) {
+                $sheetIdAlt = $tabSheetIds['Missing Alt Text'] ?? null;
+                if ($sheetIdAlt !== null) {
+                    $altRows = [];
+                    foreach ($geminiResult['missing_alt_text_images'] as $idx => $item) {
+                        $altRows[] = [
+                            $idx + 1,
+                            $item['page_url']       ?? '',
+                            $item['image_src']      ?? '',
+                            'Missing Alt Text',
+                            '',   // Recommended Alt Text – left for the team
+                            '',   // Comments
+                            now()->format('Y-m-d'),
+                        ];
+                    }
+
+                    $sheetsService->spreadsheets_values->update(
+                        $spreadsheetId,
+                        'Missing Alt Text!A2',
+                        new ValueRange(['values' => $altRows]),
+                        ['valueInputOption' => 'USER_ENTERED']
+                    );
+
+                    $altRequests = [];
+                    foreach ($altRows as $rowIdx => $_) {
+                        $ri = $rowIdx + 1;
+                        $altRequests[] = new SheetsRequest([
+                            'repeatCell' => [
+                                'range'  => ['sheetId' => $sheetIdAlt, 'startRowIndex' => $ri, 'endRowIndex' => $ri + 1, 'startColumnIndex' => 0, 'endColumnIndex' => 7],
+                                'cell'   => ['userEnteredFormat' => ['backgroundColor' => ['red' => 1.0, 'green' => 0.949, 'blue' => 0.8]]],
+                                'fields' => 'userEnteredFormat.backgroundColor',
+                            ],
+                        ]);
+                    }
+                    $altRequests[] = new SheetsRequest(['autoResizeDimensions' => ['dimensions' => ['sheetId' => $sheetIdAlt, 'dimension' => 'COLUMNS', 'startIndex' => 0, 'endIndex' => 7]]]);
+                    $sheetsService->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest(['requests' => $altRequests]));
+                }
+            }
+
+            // ── Populate the "Oversize Images" sheet from PageSpeed Insights ──────────
+            $oversizeImages  = $this->fetchOversizeImages(rtrim($domain, '/'));
+            $sheetIdOversize = $tabSheetIds['Oversize Images'] ?? null;
+
+            if (!empty($oversizeImages) && $sheetIdOversize !== null) {
+                // Build value rows: [S.No., Page URL, Image URL, File Size (KB), Fixed, Recommendation, Comments]
+                $imageRows = [];
+                foreach ($oversizeImages as $idx => $img) {
+                    $imageRows[] = [
+                        $idx + 1,
+                        $img['pageUrl'],
+                        $img['imageUrl'],
+                        $img['fileSizeKb'],
+                        $img['fixed'],
+                        $img['recommendation'],
+                        $img['comments'],
+                    ];
+                }
+
+                // Write data from row 2 onwards (row 1 is the header)
+                $sheetsService->spreadsheets_values->update(
+                    $spreadsheetId,
+                    'Oversize Images!A2',
+                    new ValueRange(['values' => $imageRows]),
+                    ['valueInputOption' => 'USER_ENTERED']
+                );
+
+                // Green highlight every data row + auto-resize columns
+                $oversizeRequests = [];
+                foreach ($imageRows as $rowIdx => $imageRow) {
+                    $sheetRowIndex = $rowIdx + 1; // 0-based; row 0 = header
+                    $oversizeRequests[] = new SheetsRequest([
                         'repeatCell' => [
                             'range' => [
-                                'sheetId'          => $sheetId404,
+                                'sheetId'          => $sheetIdOversize,
                                 'startRowIndex'    => $sheetRowIndex,
                                 'endRowIndex'      => $sheetRowIndex + 1,
                                 'startColumnIndex' => 0,
@@ -541,7 +781,7 @@ class SEOAutomationController extends Controller
                             'cell' => [
                                 'userEnteredFormat' => [
                                     'backgroundColor' => [
-                                        'red'   => 0.576,  // #93c47d – same green as screenshot
+                                        'red'   => 0.576,   // #93c47d – matches 404 sheet green
                                         'green' => 0.769,
                                         'blue'  => 0.49,
                                     ],
@@ -552,11 +792,11 @@ class SEOAutomationController extends Controller
                     ]);
                 }
 
-                // Auto-resize all 7 columns after data is written
-                $coloringRequests[] = new SheetsRequest([
+                // Auto-resize all 7 columns
+                $oversizeRequests[] = new SheetsRequest([
                     'autoResizeDimensions' => [
                         'dimensions' => [
-                            'sheetId'    => $sheetId404,
+                            'sheetId'    => $sheetIdOversize,
                             'dimension'  => 'COLUMNS',
                             'startIndex' => 0,
                             'endIndex'   => 7,
@@ -564,302 +804,77 @@ class SEOAutomationController extends Controller
                     ],
                 ]);
 
-                if (!empty($coloringRequests)) {
+                if (!empty($oversizeRequests)) {
                     $sheetsService->spreadsheets->batchUpdate(
                         $spreadsheetId,
-                        new BatchUpdateSpreadsheetRequest(['requests' => $coloringRequests])
+                        new BatchUpdateSpreadsheetRequest(['requests' => $oversizeRequests])
                     );
                 }
             }
-        }
 
-
-        // ── Gemini AI: Analyse uploaded XML sitemaps ──────────────────────────────
-        // If the user uploaded XML sitemap files, send them to Gemini to detect
-        // Duplicate H1, Multiple H1, and Missing Alt Text issues.
-        $geminiResult = null;
-        if ($request->hasFile('xml_files')) {
-            $xmlContents = '';
-            foreach ($request->file('xml_files') as $xmlFile) {
-                $xmlContents .= "\n\n<!-- Sitemap: " . $xmlFile->getClientOriginalName() . " -->\n";
-                $xmlContents .= file_get_contents($xmlFile->getRealPath());
-            }
-
-            if (!empty(trim($xmlContents))) {
-                try {
-                    $geminiRaw    = $this->analyzeWithGeminiSeo($domain, $xmlContents);
-                    $geminiResult = json_decode($geminiRaw, true);
-                    Log::error('Gemini API Response', [
-                        'raw_response' => $geminiRaw,
-                        'decoded_response' => $geminiResult,
-                    ]);
-                } catch (Exception $ge) {
-                    Log::error('Gemini SEO analysis error: ' . $ge->getMessage());
-                    $geminiResult = null;
-                }
-            }
-        }
-
-        // ── Populate "Duplicate H1" sheet from Gemini result ─────────────────────
-        if (!empty($geminiResult['duplicate_h1'])) {
-            $sheetIdDupH1 = $tabSheetIds['Duplicate H1'] ?? null;
-            if ($sheetIdDupH1 !== null) {
-                $dupRows = [];
-                foreach ($geminiResult['duplicate_h1'] as $idx => $item) {
-                    $h1Text = is_array($item['h1_text']) ? implode(' | ', $item['h1_text']) : ($item['h1_text'] ?? '');
-                    $dupRows[] = [
-                        $idx + 1,
-                        $item['url']         ?? '',
-                        'Duplicate H1',
-                        $h1Text,
-                        '',   // Recommended H1 – left for the team
-                        '',   // Comments
-                        '',   // Status
-                    ];
-                }
-
-                $sheetsService->spreadsheets_values->update(
+            // ── Populate the "Page Speed" sheet ──────────────────────────────────────
+            $pageSpeedSheetId = $tabSheetIds['Page Speed'] ?? null;
+            if ($pageSpeedSheetId !== null) {
+                $this->populatePageSpeedSheet(
+                    $sheetsService,
                     $spreadsheetId,
-                    'Duplicate H1!A2',
-                    new ValueRange(['values' => $dupRows]),
-                    ['valueInputOption' => 'USER_ENTERED']
+                    $pageSpeedSheetId,
+                    rtrim($domain, '/')
                 );
-
-                $dupRequests = [];
-                foreach ($dupRows as $rowIdx => $_) {
-                    $ri = $rowIdx + 1;
-                    $dupRequests[] = new SheetsRequest([
-                        'repeatCell' => [
-                            'range'  => ['sheetId' => $sheetIdDupH1, 'startRowIndex' => $ri, 'endRowIndex' => $ri + 1, 'startColumnIndex' => 0, 'endColumnIndex' => 7],
-                            'cell'   => ['userEnteredFormat' => ['backgroundColor' => ['red' => 1.0, 'green' => 0.898, 'blue' => 0.6]]],
-                            'fields' => 'userEnteredFormat.backgroundColor',
-                        ],
-                    ]);
-                }
-                $dupRequests[] = new SheetsRequest(['autoResizeDimensions' => ['dimensions' => ['sheetId' => $sheetIdDupH1, 'dimension' => 'COLUMNS', 'startIndex' => 0, 'endIndex' => 7]]]);
-                $sheetsService->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest(['requests' => $dupRequests]));
             }
-        }
 
-        // ── Populate "Multiple H1" sheet from Gemini result ──────────────────────
-        if (!empty($geminiResult['multiple_h1'])) {
-            $sheetIdMultiH1 = $tabSheetIds['Multiple H1'] ?? null;
-            if ($sheetIdMultiH1 !== null) {
-                $multiRows = [];
-                foreach ($geminiResult['multiple_h1'] as $idx => $item) {
-                    $h1List = is_array($item['h1_contents']) ? implode(' | ', $item['h1_contents']) : ($item['h1_contents'] ?? '');
-                    $multiRows[] = [
-                        $idx + 1,
-                        $item['url']           ?? '',
-                        'Multiple H1',
-                        $item['total_h1_tags'] ?? '',
-                        $h1List,
-                        '',   // Existing H2 – left for the team
-                        '',   // Comments
-                        '',   // Status
-                    ];
-                }
-
-                $sheetsService->spreadsheets_values->update(
+            // ── Style the Dashboard tab ───────────────────────────────────────────────
+            $dashboardSheetId = $tabSheetIds['Dashboard'] ?? null;
+            if ($dashboardSheetId) {
+                // Clear existing Dashboard content first
+                $sheetsService->spreadsheets_values->clear(
                     $spreadsheetId,
-                    'Multiple H1!A2',
-                    new ValueRange(['values' => $multiRows]),
-                    ['valueInputOption' => 'USER_ENTERED']
+                    'Dashboard!A:C',
+                    new \Google\Service\Sheets\ClearValuesRequest()
                 );
-
-                $multiRequests = [];
-                foreach ($multiRows as $rowIdx => $_) {
-                    $ri = $rowIdx + 1;
-                    $multiRequests[] = new SheetsRequest([
-                        'repeatCell' => [
-                            'range'  => ['sheetId' => $sheetIdMultiH1, 'startRowIndex' => $ri, 'endRowIndex' => $ri + 1, 'startColumnIndex' => 0, 'endColumnIndex' => 8],
-                            'cell'   => ['userEnteredFormat' => ['backgroundColor' => ['red' => 1.0, 'green' => 0.851, 'blue' => 0.4]]],
-                            'fields' => 'userEnteredFormat.backgroundColor',
-                        ],
-                    ]);
-                }
-                $multiRequests[] = new SheetsRequest(['autoResizeDimensions' => ['dimensions' => ['sheetId' => $sheetIdMultiH1, 'dimension' => 'COLUMNS', 'startIndex' => 0, 'endIndex' => 8]]]);
-                $sheetsService->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest(['requests' => $multiRequests]));
+                
+                $this->styleDashboard($sheetsService, $spreadsheetId, $dashboardSheetId);
             }
-        }
 
-        // ── Populate "Missing Alt Text" sheet from Gemini result ─────────────────
-        if (!empty($geminiResult['missing_alt_text_images'])) {
-            $sheetIdAlt = $tabSheetIds['Missing Alt Text'] ?? null;
-            if ($sheetIdAlt !== null) {
-                $altRows = [];
-                foreach ($geminiResult['missing_alt_text_images'] as $idx => $item) {
-                    $altRows[] = [
-                        $idx + 1,
-                        $item['page_url']       ?? '',
-                        $item['image_src']      ?? '',
-                        'Missing Alt Text',
-                        '',   // Recommended Alt Text – left for the team
-                        '',   // Comments
-                        now()->format('Y-m-d'),
-                    ];
-                }
+            // ── Build Dashboard row data ──────────────────────────────────────────────
+            $spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/' . $spreadsheetId . '/edit';
+            $rows = $this->buildDashboardRows(
+                $sheetDefinitions,
+                $tabSheetIds,
+                $spreadsheetId,
+                $spreadsheetUrl
+            );
 
-                $sheetsService->spreadsheets_values->update(
-                    $spreadsheetId,
-                    'Missing Alt Text!A2',
-                    new ValueRange(['values' => $altRows]),
-                    ['valueInputOption' => 'USER_ENTERED']
-                );
-
-                $altRequests = [];
-                foreach ($altRows as $rowIdx => $_) {
-                    $ri = $rowIdx + 1;
-                    $altRequests[] = new SheetsRequest([
-                        'repeatCell' => [
-                            'range'  => ['sheetId' => $sheetIdAlt, 'startRowIndex' => $ri, 'endRowIndex' => $ri + 1, 'startColumnIndex' => 0, 'endColumnIndex' => 7],
-                            'cell'   => ['userEnteredFormat' => ['backgroundColor' => ['red' => 1.0, 'green' => 0.949, 'blue' => 0.8]]],
-                            'fields' => 'userEnteredFormat.backgroundColor',
-                        ],
-                    ]);
-                }
-                $altRequests[] = new SheetsRequest(['autoResizeDimensions' => ['dimensions' => ['sheetId' => $sheetIdAlt, 'dimension' => 'COLUMNS', 'startIndex' => 0, 'endIndex' => 7]]]);
-                $sheetsService->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest(['requests' => $altRequests]));
-            }
-        }
-
-        // ── Populate the "Oversize Images" sheet from PageSpeed Insights ──────────
-        $oversizeImages  = $this->fetchOversizeImages(rtrim($domain, '/'));
-        $sheetIdOversize = $tabSheetIds['Oversize Images'] ?? null;
-
-        if (!empty($oversizeImages) && $sheetIdOversize !== null) {
-            // Build value rows: [S.No., Page URL, Image URL, File Size (KB), Fixed, Recommendation, Comments]
-            $imageRows = [];
-            foreach ($oversizeImages as $idx => $img) {
-                $imageRows[] = [
-                    $idx + 1,
-                    $img['pageUrl'],
-                    $img['imageUrl'],
-                    $img['fileSizeKb'],
-                    $img['fixed'],
-                    $img['recommendation'],
-                    $img['comments'],
+            $valueData = [['Dashboard'], ['S. No', 'Error', 'Doc File']];
+            foreach ($rows as $row) {
+                $valueData[] = [
+                    $row['sno'],
+                    $row['name'],
+                    $row['url'] ?? ($row['note'] ?? ''),
                 ];
             }
 
-            // Write data from row 2 onwards (row 1 is the header)
             $sheetsService->spreadsheets_values->update(
                 $spreadsheetId,
-                'Oversize Images!A2',
-                new ValueRange(['values' => $imageRows]),
+                'Dashboard!A1',
+                new ValueRange(['values' => $valueData]),
                 ['valueInputOption' => 'USER_ENTERED']
             );
 
-            // Green highlight every data row + auto-resize columns
-            $oversizeRequests = [];
-            foreach ($imageRows as $rowIdx => $imageRow) {
-                $sheetRowIndex = $rowIdx + 1; // 0-based; row 0 = header
-                $oversizeRequests[] = new SheetsRequest([
-                    'repeatCell' => [
-                        'range' => [
-                            'sheetId'          => $sheetIdOversize,
-                            'startRowIndex'    => $sheetRowIndex,
-                            'endRowIndex'      => $sheetRowIndex + 1,
-                            'startColumnIndex' => 0,
-                            'endColumnIndex'   => 7,
-                        ],
-                        'cell' => [
-                            'userEnteredFormat' => [
-                                'backgroundColor' => [
-                                    'red'   => 0.576,   // #93c47d – matches 404 sheet green
-                                    'green' => 0.769,
-                                    'blue'  => 0.49,
-                                ],
-                            ],
-                        ],
-                        'fields' => 'userEnteredFormat.backgroundColor',
-                    ],
-                ]);
-            }
-
-            // Auto-resize all 7 columns
-            $oversizeRequests[] = new SheetsRequest([
-                'autoResizeDimensions' => [
-                    'dimensions' => [
-                        'sheetId'    => $sheetIdOversize,
-                        'dimension'  => 'COLUMNS',
-                        'startIndex' => 0,
-                        'endIndex'   => 7,
-                    ],
-                ],
+            return response()->json([
+                'success'         => true,
+                'spreadsheet_url' => $spreadsheetUrl,
+                'rows'            => $rows,
             ]);
 
-            if (!empty($oversizeRequests)) {
-                $sheetsService->spreadsheets->batchUpdate(
-                    $spreadsheetId,
-                    new BatchUpdateSpreadsheetRequest(['requests' => $oversizeRequests])
-                );
-            }
+        } catch (Exception $e) {
+            Log::error('Reporting Sheet Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update spreadsheet: ' . $e->getMessage(),
+            ], 500);
         }
-
-        // ── Populate the "Page Speed" sheet ──────────────────────────────────────
-        $pageSpeedSheetId = $tabSheetIds['Page Speed'] ?? null;
-        if ($pageSpeedSheetId !== null) {
-            $this->populatePageSpeedSheet(
-                $sheetsService,
-                $spreadsheetId,
-                $pageSpeedSheetId,
-                rtrim($domain, '/')
-            );
-        }
-
-        // ── Style the Dashboard tab ───────────────────────────────────────────────
-        $dashboardSheetId = $tabSheetIds['Dashboard'] ?? null;
-        if ($dashboardSheetId) {
-            // Clear existing Dashboard content first
-            $sheetsService->spreadsheets_values->clear(
-                $spreadsheetId,
-                'Dashboard!A:C',
-                new \Google\Service\Sheets\ClearValuesRequest()
-            );
-            
-            $this->styleDashboard($sheetsService, $spreadsheetId, $dashboardSheetId);
-        }
-
-        // ── Build Dashboard row data ──────────────────────────────────────────────
-        $spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/' . $spreadsheetId . '/edit';
-        $rows = $this->buildDashboardRows(
-            $sheetDefinitions,
-            $tabSheetIds,
-            $spreadsheetId,
-            $spreadsheetUrl
-        );
-
-        $valueData = [['Dashboard'], ['S. No', 'Error', 'Doc File']];
-        foreach ($rows as $row) {
-            $valueData[] = [
-                $row['sno'],
-                $row['name'],
-                $row['url'] ?? ($row['note'] ?? ''),
-            ];
-        }
-
-        $sheetsService->spreadsheets_values->update(
-            $spreadsheetId,
-            'Dashboard!A1',
-            new ValueRange(['values' => $valueData]),
-            ['valueInputOption' => 'USER_ENTERED']
-        );
-
-        return response()->json([
-            'success'         => true,
-            'spreadsheet_url' => $spreadsheetUrl,
-            'rows'            => $rows,
-        ]);
-
-    } catch (Exception $e) {
-        Log::error('Reporting Sheet Error: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to update spreadsheet: ' . $e->getMessage(),
-        ], 500);
     }
-}
 
 /**
  * Helper method to convert column index to letter (e.g., 0 -> A, 25 -> Z, 26 -> AA)
@@ -1050,13 +1065,14 @@ private function getColumnLetter($index)
         }
 
         // We request ALL categories so we can read every audit block.
-        $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?' . http_build_query([
+        $queryParams = [
             'url'      => $domain,
             'key'      => $apiKey,
-            'strategy' => 'mobile',          // mobile gives us the full network graph
-            'category' => ['seo', 'best-practices', 'performance'],
-        ], '', '&', PHP_QUERY_RFC3986);
-
+            'strategy' => 'mobile',
+        ];
+        $queryString = http_build_query($queryParams);
+        $queryString .= '&category=seo&category=best-practices&category=performance';
+        $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?'.$queryString;
         try {
             $response = Http::timeout(90)->get($apiUrl);
         } catch (\Exception $e) {
@@ -1307,23 +1323,23 @@ private function getColumnLetter($index)
     {
         $apiKey  = env('PAGESPEED_API_KEY');
         $results = [];
+        $categories = ['performance', 'accessibility', 'best-practices', 'seo'];
 
-        foreach (['desktop', 'mobile'] as $strategy) {
-            // Build query parameters properly for multiple categories
+        foreach (['mobile', 'desktop'] as $strategy) {
             $queryParams = [
                 'url'      => $domain,
                 'key'      => $apiKey,
                 'strategy' => $strategy,
             ];
-            
-            // Add each category as a separate query parameter
-            $categories = ['performance', 'accessibility', 'best-practices', 'seo'];
+
+            // Manually append categories (important)
+            $queryString = http_build_query($queryParams);
+
             foreach ($categories as $category) {
-                $queryParams['category'][] = $category;
+                $queryString .= '&category=' . urlencode($category);
             }
-            
-            $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?' . 
-                    http_build_query($queryParams, '', '&', PHP_QUERY_RFC3986);
+
+            $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?' . $queryString;
             
             // Alternative: Manually build if the above doesn't work
             // $apiUrl = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?" .

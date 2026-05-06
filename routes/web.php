@@ -76,7 +76,7 @@ Route::middleware(['auth', 'session.valid'])->group(function () {
 });
 Route::get('/seo-broken-links/{domain}', [SEOAutomationController::class, 'checkBrokenLinks'])->name('broken.links')->where('domain', '[^/]+');
 
-Route::get('/website-health-audit/{domain}', [SEOAutomationController::class, 'websiteHealthAudit']);
+Route::post('/website-health-audit/{domain}', [SEOAutomationController::class, 'websiteHealthAudit'])->name('website.health.audit')->where('domain', '[^/]+');
 Route::get('/seo/{created_by_user_id}/{client_property_id}/website-health-audit',
     [SEOAutomationController::class, 'websiteHealthAuditPage'])
     ->name('seo.website-health-audit-page');

@@ -48,26 +48,14 @@
                                                         <ul class="dropdown-menu dropdown-menu-end">
                                                             
                                                             @if(in_array(Auth::user()->role->name, ['Admin']) || Auth::user()->team_id == 1)
-                                                                <li class="dropdown-item">
-                                                                    <a href="{{url('ranking-competitor-report/'.$client->user_id.'/'.$client->id)}}" class="btn btn-link nav-link" style="text-align:left; padding:0; border:none; background:none;">
-                                                                        <i class="mdi_icon mdi mdi-pencil-box-multiple text-muted"></i> Ranking-Competitor Report
-                                                                    </a> 
-                                                                </li>
-                                                                <li class="dropdown-item">
-                                                                    <a href="{{url('core-web-vitals/'.$client->user_id.'/'.$client->id)}}" class="btn btn-link nav-link" style="text-align:left; padding:0; border:none; background:none;">
-                                                                        <i class="mdi_icon mdi mdi-delete-circle-outline text-muted"></i> Core Web Vitals
-                                                                    </a>
-                                                                </li>
-                                                                
-                                                                <li><hr class="dropdown-divider"></li>
                                                                 <li>
-                                                                    <a class="dropdown-item text-success" href="{{url('reporting-sheet/'.$client->user_id.'/'.$client->id)}}">
-                                                                        Reporting Sheet
+                                                                    <a class="dropdown-item" href="{{url('reporting-sheet/'.$client->user_id.'/'.$client->id)}}">
+                                                                        <i class="mdi_icon mdi mdi-pencil-box-multiple text-muted"></i> Reporting Sheet
                                                                     </a>
                                                                 </li> 
                                                                 <li>
-                                                                    <a class="dropdown-item text-success" href="{{url('seo-dashboard/'.$client->user_id.'/'.$client->id)}}">
-                                                                        SEO Dashboard
+                                                                    <a class="dropdown-item" href="{{url('seo-dashboard/'.$client->user_id.'/'.$client->id)}}">
+                                                                        <i class="mdi_icon mdi mdi-delete-circle-outline text-muted"></i> SEO Dashboard
                                                                     </a>
                                                                 </li>
                                                             @endif
