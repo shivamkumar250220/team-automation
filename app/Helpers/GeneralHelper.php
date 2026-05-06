@@ -22,7 +22,7 @@ class GeneralHelper
             return json_encode(['error' => $ex->getMessage()]);
         }
     }
-
+ 
     public static function getDomainByClientPropertyId($client_property_id)
     {
         $clientProperty = Client_propertiesModel::find($client_property_id);

@@ -345,4 +345,4 @@ function handleXmlDrop(event) {
     renderXmlChips();
 }
 </script>
-@endpush
+@endpush 

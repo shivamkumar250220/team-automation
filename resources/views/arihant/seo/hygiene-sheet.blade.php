@@ -450,7 +450,7 @@
             <div class="hs-domain-badge">
                 <i class="ri-global-line"></i>
                 <span id="displayDomain">{{ $group['display_url'] ?? 'No domain set' }}</span>
-            </div>
+            </div> 
         </div>
         <button class="hs-run-btn" id="runAnalysisBtn" onclick="runFullAnalysis()">
             <div class="spinner"></div>

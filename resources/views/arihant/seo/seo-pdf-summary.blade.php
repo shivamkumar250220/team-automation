@@ -4,7 +4,7 @@
 @section('page_header', 'SEO PDF Summary')
 @section('page_icon', 'mdi mdi-magnify')
 
-@section('breadcrumb')
+@section('breadcrumb') 
     <li class="breadcrumb-item">
         <a href="{{ route('seo.dashboard', [$created_by_user_id, $client_property_id]) }}">SEO Tools</a>
     </li>

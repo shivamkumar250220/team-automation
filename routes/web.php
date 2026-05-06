@@ -84,6 +84,6 @@ Route::get('/seo/{created_by_user_id}/{client_property_id}/website-health-audit'
 // AJAX data endpoint (called by JS with the domain segment)
 Route::get('/seo/{created_by_user_id}/{client_property_id}/website-health-audit/{domain}',
     [SEOAutomationController::class, 'websiteHealthAudit'])
-    ->name('seo.website-health-audit');
+    ->name('seo.website-health-audit'); 
 
 Route::post('/audit-competitor', [SEOAutomationController::class, 'auditCompetitor']);

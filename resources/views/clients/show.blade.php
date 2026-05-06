@@ -64,7 +64,7 @@
                                                                     <a class="dropdown-item text-success" href="{{url('reporting-sheet/'.$client->user_id.'/'.$client->id)}}">
                                                                         Reporting Sheet
                                                                     </a>
-                                                                </li>
+                                                                </li> 
                                                                 <li>
                                                                     <a class="dropdown-item text-success" href="{{url('seo-dashboard/'.$client->user_id.'/'.$client->id)}}">
                                                                         SEO Dashboard

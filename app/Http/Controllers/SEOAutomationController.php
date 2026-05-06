@@ -89,7 +89,7 @@ class SEOAutomationController extends Controller
 
     } catch (\Illuminate\Http\Client\ConnectionException $e) {
         // Catches cURL timeout / connection errors specifically
-        return response()->json([
+        return response()->json([ 
             'success' => false,
             'message' => 'Audit timed out. The site may be slow to respond — please try again.',
             'error'   => 'timeout'

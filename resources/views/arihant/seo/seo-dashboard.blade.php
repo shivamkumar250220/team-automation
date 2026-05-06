@@ -3040,6 +3040,17 @@ function renderCompetitorAuditModal(auditData, url, title) {
             </button>
         </div>`;
     }
+    if (auditData.error_message ) {
+        return `
+        <div class="text-center py-5">
+            <i class="mdi mdi-alert-circle text-danger" style="font-size: 3rem;"></i>
+            <h5 class="mt-3">Audit Failed</h5>
+            <p class="text-muted">${auditData?.error_message || 'Unable to fetch audit data for this competitor.'}</p>
+            <button class="btn btn-sm btn-outline-primary mt-2" onclick="fetchCompetitorAudit('${escapeHtml(url)}').then(() => openCompetitorAuditModal('${escapeHtml(url)}', '${escapeHtml(title)}'))">
+                <i class="mdi mdi-refresh me-1"></i> Retry
+            </button>
+        </div>`;
+    }
     
     const data = auditData.data;
     const overallScore = data.overall_score || 0;
@@ -3206,7 +3217,7 @@ async function openCompetitorAuditModal(url, title) {
     let modal = document.getElementById('competitorAuditModal');
     if (!modal) {
         modal = document.createElement('div');
-        modal.id = 'competitorAuditModal';
+        modal.id = 'competitorAuditModal'; 
         modal.className = 'modal fade';
         modal.setAttribute('tabindex', '-1');
         modal.innerHTML = `

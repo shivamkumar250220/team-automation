@@ -15,7 +15,7 @@ class VerifyCsrfToken extends Middleware
         "keyword-store",
         "store-keyword-planner",
         "auto-keyword-fetch",
-        "aio-keyword-fetch",
+        "aio-keyword-fetch", 
         "keyword-store-more",
         "median-display",
         "fetch-keyword-planner-keywords",

@@ -406,7 +406,7 @@ async function runHealthAudit() {
 
         clearInterval(progressTimer);
         setProgress(100, 'Audit complete!');
-
+ 
         const json = await response.json();
 
         if (!response.ok || !json.success) {

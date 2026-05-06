@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-
+ 
 class CoreWebVital extends Model
 {
     protected $table = 'core_web_vitals';

@@ -21,7 +21,7 @@
 
     {{-- Main Admin CSS --}}
     <link href="{{ asset('css/style.css') }}" rel="stylesheet">
-
+ 
     <style>
         /* ── FIX: keep all navbar items on ONE row, never wrap ── */
         .navbar-menu-wrapper {
