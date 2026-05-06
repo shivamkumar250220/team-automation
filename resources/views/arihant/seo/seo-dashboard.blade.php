@@ -3227,7 +3227,7 @@ async function openCompetitorAuditModal(url, title) {
                     <h5 class="modal-title"><i class="mdi mdi-chart-line me-2"></i> <span id="auditModalTitle">SEO Audit</span></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body" id="auditModalBody" style="max-height: 70vh; overflow-y: auto;">
+                <div class="modal-body" id="auditModalBody" style="overflow-y: auto;">
                     <div class="text-center py-5">
                         <div class="spinner-border text-primary" role="status"></div>
                         <p class="mt-2">Fetching audit data...</p>
