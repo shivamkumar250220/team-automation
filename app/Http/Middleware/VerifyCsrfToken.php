@@ -19,5 +19,7 @@ class VerifyCsrfToken extends Middleware
         "keyword-store-more",
         "median-display",
         "fetch-keyword-planner-keywords",
+        "seo-broken-links",
+        "audit-competitor",
     ];
 }

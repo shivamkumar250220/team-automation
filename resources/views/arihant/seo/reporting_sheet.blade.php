@@ -86,6 +86,40 @@
                                 </div>
                             </div>
                         </div>
+
+                        {{-- XML Sitemap Files --}}
+                        <div class="col-12">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Sitemap XML Files
+                                    <span class="badge bg-secondary ms-1" style="font-size:0.7rem;">Optional</span>
+                                </label>
+                                <div id="xmlDropZone"
+                                     class="border border-2 border-dashed rounded p-4 text-center"
+                                     style="border-color:#ced4da!important; cursor:pointer; transition:background .2s;"
+                                     ondragover="event.preventDefault(); this.style.background='#eef4ff';"
+                                     ondragleave="this.style.background='';"
+                                     ondrop="handleXmlDrop(event)">
+                                    <i class="mdi mdi-file-xml-box fs-2 text-muted"></i>
+                                    <p class="mb-1 text-muted">Drag &amp; drop <strong>.xml</strong> files here, or</p>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="$('#xmlFilesInput').click()">
+                                        Browse files
+                                    </button>
+                                    <input type="file" id="xmlFilesInput" name="xml_files[]"
+                                           accept=".xml,application/xml,text/xml"
+                                           multiple class="d-none">
+                                    <p class="form-text text-muted mb-0 mt-2">
+                                        <i class="mdi mdi-information-outline"></i>
+                                        Upload one or more sitemap XML files. They will be analysed for
+                                        <strong>Duplicate H1</strong>, <strong>Multiple H1</strong>, and
+                                        <strong>Missing Alt Text</strong> issues via Gemini AI.
+                                    </p>
+                                </div>
+
+                                {{-- Selected file chips --}}
+                                <div id="xmlFileList" class="d-flex flex-wrap gap-2 mt-2"></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="d-flex align-items-center gap-3 mt-4">
@@ -212,10 +246,24 @@ $(function () {
 
         setLoading(true);
 
+        // Use FormData so that file inputs are included in the request
+        const fd = new FormData(this);
+
+        // Attach any files added via drag-and-drop (stored in our custom array)
+        if (window._xmlFiles && window._xmlFiles.length) {
+            // Remove the default (possibly empty) file input entries first
+            fd.delete('xml_files[]');
+            window._xmlFiles.forEach(function (file) {
+                fd.append('xml_files[]', file);
+            });
+        }
+
         $.ajax({
             url: '{{ route("reporting.sheet.form", [$created_by_user_id, $client_property_id]) }}',
             method: 'POST',
-            data: form.serialize(),
+            data: fd,
+            processData: false,   // required for FormData
+            contentType: false,   // required for FormData
             success: function (res) {
                 setLoading(false);
                 if (res.success && res.rows) {
@@ -237,7 +285,64 @@ $(function () {
         spreadsheetLink.addClass('d-none');
         dashboardBody.empty();
         form.removeClass('was-validated');
+        // Clear XML file list
+        window._xmlFiles = [];
+        $('#xmlFileList').empty();
+        $('#xmlFilesInput').val('');
+        $('#xmlDropZone').css('background', '');
     });
 });
+
+/* ── XML file handling ──────────────────────────────────────────────────── */
+window._xmlFiles = [];   // master list (merges browse + drag-drop)
+
+function renderXmlChips() {
+    const list = $('#xmlFileList');
+    list.empty();
+    window._xmlFiles.forEach(function (file, idx) {
+        list.append(
+            $('<span>')
+                .addClass('badge bg-light text-dark border d-flex align-items-center gap-1 py-1 px-2')
+                .css('font-size', '0.8rem')
+                .append(
+                    $('<i>').addClass('mdi mdi-file-xml-box text-primary'),
+                    $('<span>').text(file.name),
+                    $('<button>')
+                        .attr('type', 'button')
+                        .addClass('btn-close btn-close-sm ms-1')
+                        .css('font-size', '0.6rem')
+                        .on('click', function () {
+                            window._xmlFiles.splice(idx, 1);
+                            renderXmlChips();
+                        })
+                )
+        );
+    });
+}
+
+// Browse via file input
+$('#xmlFilesInput').on('change', function () {
+    Array.from(this.files).forEach(function (f) {
+        if (!window._xmlFiles.find(x => x.name === f.name && x.size === f.size)) {
+            window._xmlFiles.push(f);
+        }
+    });
+    renderXmlChips();
+});
+
+// Drag & drop
+function handleXmlDrop(event) {
+    event.preventDefault();
+    document.getElementById('xmlDropZone').style.background = '';
+    const files = Array.from(event.dataTransfer.files).filter(f =>
+        f.name.endsWith('.xml') || f.type === 'application/xml' || f.type === 'text/xml'
+    );
+    files.forEach(function (f) {
+        if (!window._xmlFiles.find(x => x.name === f.name && x.size === f.size)) {
+            window._xmlFiles.push(f);
+        }
+    });
+    renderXmlChips();
+}
 </script>
 @endpush

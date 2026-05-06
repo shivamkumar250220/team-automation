@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\GeneralHelper;
+use App\Models\Client_propertiesModel;
 use App\Models\CoreWebVital;
 use App\Models\RankingCompetitorReport;
 use Exception;
@@ -53,6 +54,54 @@ class SEOAutomationController extends Controller
             compact('created_by_user_id', 'client_property_id', 'domain', 'savedReports')
         );
     }
+    public function auditCompetitor(Request $request)
+{
+    try {
+        $request->validate([
+            'url' => 'required|url'
+        ]);
+
+        $response = Http::withToken('1cb22d77fb105a8b929be6bd237eb5ae09abfbf5125e51d3cdeac46d070173ef')
+            ->acceptJson()
+            ->timeout(180)
+            ->post('https://seotech.ichelon.in/api/audit', [
+                'url' => $request->url,
+                'wait' => true
+            ]);
+
+        // dd($response->body()); // better debug
+
+        if ($response->failed()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'API request failed',
+                'status'  => $response->status(),
+                'body'    => $response->body()
+            ], $response->status());
+        }
+        $data = $response->json();
+
+        return response()->json([
+            'success'    => true,
+            'data'       => $data['data'] ?? $data,
+            'fetched_at' => now()->toISOString()
+        ]);
+
+    } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        // Catches cURL timeout / connection errors specifically
+        return response()->json([
+            'success' => false,
+            'message' => 'Audit timed out. The site may be slow to respond — please try again.',
+            'error'   => 'timeout'
+        ], 504);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
 
     public function rankingCompetitorReportForm(Request $request)
     {
@@ -72,6 +121,20 @@ class SEOAutomationController extends Controller
                 'message' => $searchData['error'] ?? 'Failed to fetch results',
             ], 422);
         }
+
+        $aiOverview = null;
+
+        if (isset($searchData['ai_overview'])) {
+            if (!isset($searchData['ai_overview']['page_token'])) {
+                $aiOverview = $searchData['ai_overview'];
+            } else {
+                $aioJson    = GeneralHelper::getaioResult($searchData['ai_overview']['page_token']);
+                $aiOverview = json_decode($aioJson, true);
+            }
+        }
+
+        // Always expose ai_overview at the top level so the frontend reads one key
+        $searchData['ai_overview'] = $aiOverview;
 
         return response()->json($searchData);
     }
@@ -148,12 +211,13 @@ class SEOAutomationController extends Controller
         $results = [];
 
         foreach (['mobile', 'desktop'] as $strategy) {
-            $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?' . http_build_query([
+            $query = http_build_query([
                 'url'      => $url,
                 'key'      => $apiKey,
                 'strategy' => $strategy,
-                'category' => 'performance',
-            ]);
+            ]) . '&category=performance&category=accessibility&category=best-practices&category=seo';
+
+            $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?' . $query;
 
             $response = Http::timeout(60)->get($apiUrl);
 
@@ -175,6 +239,9 @@ class SEOAutomationController extends Controller
 
             $results[$strategy] = [
                 'performance_score' => (int) round(($categories['performance']['score'] ?? 0) * 100),
+                'accessibility_score' => (int) round(($categories['accessibility']['score'] ?? 0) * 100),
+                'best_practices_score'=> (int) round(($categories['best-practices']['score'] ?? 0) * 100),
+                'seo_score'           => (int) round(($categories['seo']['score'] ?? 0) * 100),
                 'fcp'               => $audit('first-contentful-paint'),
                 'lcp'               => $audit('largest-contentful-paint'),
                 'tbt'               => $audit('total-blocking-time'),
@@ -226,7 +293,9 @@ class SEOAutomationController extends Controller
         'ourclient'          => 'required|string',
         'created_by_user_id' => 'required|integer',
         'client_property_id' => 'required|integer',
-        'spreadsheet_url'    => 'required|string', // Changed from drive_folder_url to spreadsheet_url
+        'spreadsheet_url'    => 'required|string',
+        'xml_files'          => 'nullable|array',
+        'xml_files.*'        => 'nullable|file|mimetypes:text/xml,application/xml,text/plain|max:10240',
     ]);
 
     $domain          = $request->input('ourclient');
@@ -250,38 +319,26 @@ class SEOAutomationController extends Controller
             'name'    => '404',
             'headers' => ['S.No.', 'Link From', 'URL', 'Status Code', 'Link On Text', 'Comments', 'Status'],
         ],
-        // [
-        //     'name'    => 'Duplicate H1',
-        //     'headers' => ['S.No.', 'Page URL', 'Error', 'Existing H1', 'Recommended H1', 'Comments', 'Status'],
-        // ],
-        // [
-        //     'name'    => 'Multiple H1',
-        //     'headers' => ['S.No.', 'Page URL', 'Error', 'H1 Count', 'Existing H1', 'Existing H2', 'Comments', 'Status'],
-        // ],
-        // [
-        //     'name'    => 'Missing Alt Text',
-        //     'headers' => ['S.No.	LInk From	URL	Error	Recommended Alt Text	Comments	Date'],
-        // ],
+        [
+            'name'    => 'Duplicate H1',
+            'headers' => ['S.No.', 'Page URL', 'Error', 'Existing H1', 'Recommended H1', 'Comments', 'Status'],
+        ],
+        [
+            'name'    => 'Multiple H1',
+            'headers' => ['S.No.', 'Page URL', 'Error', 'H1 Count', 'Comments', 'Status'],
+        ],
+        [
+            'name'    => 'Missing Alt Text',
+            'headers' => ['S.No.', 'Link From', 'URL', 'Error', 'Recommended Alt Text', 'Comments', 'Date'],
+        ],
         [
             'name'    => 'Oversize Images',
-            'headers' => ['S. No', 'Page URL', 'Image URL', 'File Size (KB)', 'Fixed', 'Recommendation', 'Comments'],
+            'headers' => ['S.No', 'Link From', 'URL', 'Size', 'Compressed Image', 'Recommendation', 'Comments'],
         ],
-        // [
-        //     'name'    => 'Schema',
-        //     'headers' => ['S. No', 'Page URL', 'Schema Type', 'Status', 'Notes'],
-        // ],
         [
             'name'    => 'Page Speed',
             'headers' => [],
         ],
-        // [
-        //     'name'    => 'Audit',
-        //     'docType' => 'document',
-        // ],
-        // [
-        //     'name' => 'Robots TXT',
-        //     'note' => 'Need to Create Robots.txt',
-        // ],
     ];
 
     try {
@@ -516,6 +573,155 @@ class SEOAutomationController extends Controller
             }
         }
 
+
+        // ── Gemini AI: Analyse uploaded XML sitemaps ──────────────────────────────
+        // If the user uploaded XML sitemap files, send them to Gemini to detect
+        // Duplicate H1, Multiple H1, and Missing Alt Text issues.
+        $geminiResult = null;
+        if ($request->hasFile('xml_files')) {
+            $xmlContents = '';
+            foreach ($request->file('xml_files') as $xmlFile) {
+                $xmlContents .= "\n\n<!-- Sitemap: " . $xmlFile->getClientOriginalName() . " -->\n";
+                $xmlContents .= file_get_contents($xmlFile->getRealPath());
+            }
+
+            if (!empty(trim($xmlContents))) {
+                try {
+                    $geminiRaw    = $this->analyzeWithGeminiSeo($domain, $xmlContents);
+                    $geminiResult = json_decode($geminiRaw, true);
+                    Log::error('Gemini API Response', [
+                        'raw_response' => $geminiRaw,
+                        'decoded_response' => $geminiResult,
+                    ]);
+                } catch (Exception $ge) {
+                    Log::error('Gemini SEO analysis error: ' . $ge->getMessage());
+                    $geminiResult = null;
+                }
+            }
+        }
+
+        // ── Populate "Duplicate H1" sheet from Gemini result ─────────────────────
+        if (!empty($geminiResult['duplicate_h1'])) {
+            $sheetIdDupH1 = $tabSheetIds['Duplicate H1'] ?? null;
+            if ($sheetIdDupH1 !== null) {
+                $dupRows = [];
+                foreach ($geminiResult['duplicate_h1'] as $idx => $item) {
+                    $h1Text = is_array($item['h1_text']) ? implode(' | ', $item['h1_text']) : ($item['h1_text'] ?? '');
+                    $dupRows[] = [
+                        $idx + 1,
+                        $item['url']         ?? '',
+                        'Duplicate H1',
+                        $h1Text,
+                        '',   // Recommended H1 – left for the team
+                        '',   // Comments
+                        '',   // Status
+                    ];
+                }
+
+                $sheetsService->spreadsheets_values->update(
+                    $spreadsheetId,
+                    'Duplicate H1!A2',
+                    new ValueRange(['values' => $dupRows]),
+                    ['valueInputOption' => 'USER_ENTERED']
+                );
+
+                $dupRequests = [];
+                foreach ($dupRows as $rowIdx => $_) {
+                    $ri = $rowIdx + 1;
+                    $dupRequests[] = new SheetsRequest([
+                        'repeatCell' => [
+                            'range'  => ['sheetId' => $sheetIdDupH1, 'startRowIndex' => $ri, 'endRowIndex' => $ri + 1, 'startColumnIndex' => 0, 'endColumnIndex' => 7],
+                            'cell'   => ['userEnteredFormat' => ['backgroundColor' => ['red' => 1.0, 'green' => 0.898, 'blue' => 0.6]]],
+                            'fields' => 'userEnteredFormat.backgroundColor',
+                        ],
+                    ]);
+                }
+                $dupRequests[] = new SheetsRequest(['autoResizeDimensions' => ['dimensions' => ['sheetId' => $sheetIdDupH1, 'dimension' => 'COLUMNS', 'startIndex' => 0, 'endIndex' => 7]]]);
+                $sheetsService->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest(['requests' => $dupRequests]));
+            }
+        }
+
+        // ── Populate "Multiple H1" sheet from Gemini result ──────────────────────
+        if (!empty($geminiResult['multiple_h1'])) {
+            $sheetIdMultiH1 = $tabSheetIds['Multiple H1'] ?? null;
+            if ($sheetIdMultiH1 !== null) {
+                $multiRows = [];
+                foreach ($geminiResult['multiple_h1'] as $idx => $item) {
+                    $h1List = is_array($item['h1_contents']) ? implode(' | ', $item['h1_contents']) : ($item['h1_contents'] ?? '');
+                    $multiRows[] = [
+                        $idx + 1,
+                        $item['url']           ?? '',
+                        'Multiple H1',
+                        $item['total_h1_tags'] ?? '',
+                        $h1List,
+                        '',   // Existing H2 – left for the team
+                        '',   // Comments
+                        '',   // Status
+                    ];
+                }
+
+                $sheetsService->spreadsheets_values->update(
+                    $spreadsheetId,
+                    'Multiple H1!A2',
+                    new ValueRange(['values' => $multiRows]),
+                    ['valueInputOption' => 'USER_ENTERED']
+                );
+
+                $multiRequests = [];
+                foreach ($multiRows as $rowIdx => $_) {
+                    $ri = $rowIdx + 1;
+                    $multiRequests[] = new SheetsRequest([
+                        'repeatCell' => [
+                            'range'  => ['sheetId' => $sheetIdMultiH1, 'startRowIndex' => $ri, 'endRowIndex' => $ri + 1, 'startColumnIndex' => 0, 'endColumnIndex' => 8],
+                            'cell'   => ['userEnteredFormat' => ['backgroundColor' => ['red' => 1.0, 'green' => 0.851, 'blue' => 0.4]]],
+                            'fields' => 'userEnteredFormat.backgroundColor',
+                        ],
+                    ]);
+                }
+                $multiRequests[] = new SheetsRequest(['autoResizeDimensions' => ['dimensions' => ['sheetId' => $sheetIdMultiH1, 'dimension' => 'COLUMNS', 'startIndex' => 0, 'endIndex' => 8]]]);
+                $sheetsService->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest(['requests' => $multiRequests]));
+            }
+        }
+
+        // ── Populate "Missing Alt Text" sheet from Gemini result ─────────────────
+        if (!empty($geminiResult['missing_alt_text_images'])) {
+            $sheetIdAlt = $tabSheetIds['Missing Alt Text'] ?? null;
+            if ($sheetIdAlt !== null) {
+                $altRows = [];
+                foreach ($geminiResult['missing_alt_text_images'] as $idx => $item) {
+                    $altRows[] = [
+                        $idx + 1,
+                        $item['page_url']       ?? '',
+                        $item['image_src']      ?? '',
+                        'Missing Alt Text',
+                        '',   // Recommended Alt Text – left for the team
+                        '',   // Comments
+                        now()->format('Y-m-d'),
+                    ];
+                }
+
+                $sheetsService->spreadsheets_values->update(
+                    $spreadsheetId,
+                    'Missing Alt Text!A2',
+                    new ValueRange(['values' => $altRows]),
+                    ['valueInputOption' => 'USER_ENTERED']
+                );
+
+                $altRequests = [];
+                foreach ($altRows as $rowIdx => $_) {
+                    $ri = $rowIdx + 1;
+                    $altRequests[] = new SheetsRequest([
+                        'repeatCell' => [
+                            'range'  => ['sheetId' => $sheetIdAlt, 'startRowIndex' => $ri, 'endRowIndex' => $ri + 1, 'startColumnIndex' => 0, 'endColumnIndex' => 7],
+                            'cell'   => ['userEnteredFormat' => ['backgroundColor' => ['red' => 1.0, 'green' => 0.949, 'blue' => 0.8]]],
+                            'fields' => 'userEnteredFormat.backgroundColor',
+                        ],
+                    ]);
+                }
+                $altRequests[] = new SheetsRequest(['autoResizeDimensions' => ['dimensions' => ['sheetId' => $sheetIdAlt, 'dimension' => 'COLUMNS', 'startIndex' => 0, 'endIndex' => 7]]]);
+                $sheetsService->spreadsheets->batchUpdate($spreadsheetId, new BatchUpdateSpreadsheetRequest(['requests' => $altRequests]));
+            }
+        }
 
         // ── Populate the "Oversize Images" sheet from PageSpeed Insights ──────────
         $oversizeImages  = $this->fetchOversizeImages(rtrim($domain, '/'));
@@ -1103,12 +1309,31 @@ private function getColumnLetter($index)
         $results = [];
 
         foreach (['desktop', 'mobile'] as $strategy) {
-            $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?' . http_build_query([
+            // Build query parameters properly for multiple categories
+            $queryParams = [
                 'url'      => $domain,
                 'key'      => $apiKey,
                 'strategy' => $strategy,
-                'category' => ['performance', 'accessibility', 'best-practices', 'seo'],
-            ], '', '&', PHP_QUERY_RFC3986);
+            ];
+            
+            // Add each category as a separate query parameter
+            $categories = ['performance', 'accessibility', 'best-practices', 'seo'];
+            foreach ($categories as $category) {
+                $queryParams['category'][] = $category;
+            }
+            
+            $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?' . 
+                    http_build_query($queryParams, '', '&', PHP_QUERY_RFC3986);
+            
+            // Alternative: Manually build if the above doesn't work
+            // $apiUrl = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?" .
+            //           "url=" . urlencode($domain) .
+            //           "&key=" . $apiKey .
+            //           "&strategy=" . $strategy .
+            //           "&category=performance" .
+            //           "&category=accessibility" .
+            //           "&category=best-practices" .
+            //           "&category=seo";
 
             try {
                 $response = Http::timeout(120)->get($apiUrl);
@@ -1465,6 +1690,161 @@ private function getColumnLetter($index)
     }
 
     /**
+     * Obtain a short-lived Google OAuth2 access token from the service-account key.
+     */
+    private function getGoogleAccessToken(): string
+    {
+        $keyFilePath = storage_path('app/service-account-key.json');
+
+        if (!file_exists($keyFilePath)) {
+            throw new Exception("Service account key file not found: {$keyFilePath}");
+        }
+
+        $scopes = ['https://www.googleapis.com/auth/cloud-platform'];
+        $creds  = new \Google\Auth\Credentials\ServiceAccountCredentials($scopes, $keyFilePath);
+        $token  = $creds->fetchAuthToken();
+
+        if (empty($token['access_token'])) {
+            throw new Exception('Could not obtain Google access token for Gemini.');
+        }
+
+        return $token['access_token'];
+    }
+
+    /**
+     * Send the sitemap XML content to Gemini and get back a JSON SEO audit.
+     *
+     * @param  string $domain      The client's main domain (e.g. https://example.com/)
+     * @param  string $xmlContents Raw XML content from one or more sitemap files
+     * @return string              Raw JSON string from Gemini
+     */
+    private function analyzeWithGeminiSeo(string $domain, string $xmlContents): string
+    {
+        $projectId  = env('GCP_PROJECT_ID', 'composed-arch-472508-u2');
+        $location   = env('GCP_LOCATION',   'us-central1');
+        $modelId    = env('GEMINI_MODEL_ID', 'gemini-2.5-flash');
+        $endpoint   = "https://{$location}-aiplatform.googleapis.com/v1/projects/{$projectId}/locations/{$location}/publishers/google/models/{$modelId}:generateContent";
+
+        $accessToken = $this->getGoogleAccessToken();
+
+        $prompt = <<<PROMPT
+Role: You are an advanced Technical SEO Auditor AI specialized in deep-page element extraction.
+
+Input Data:
+1. Main Domain: {$domain}
+2. Source: Multiple sitemap extracted Urls (provided below).
+
+Operational Constraints:
+- Source Restriction: Use ONLY the provided Sitemap XMLs for URL discovery.
+- Success Definition: A URL is "Successfully Crawled" if you can access the HTML, even if it contains SEO errors.
+- Failure Definition: A URL is "Failed/Skipped" ONLY if there is a 404/500 error, a timeout, or the page is blocked by robots.txt/noindex. SEO issues (like missing Alt parameter on any image or multiple H1s) are NOT crawl failures.
+
+Step 1: URL Extraction & Access
+1. Parse all <loc> tags from the provided sitemaps.
+2. Deduplicate the list.
+3. Access each URL to analyze the live HTML DOM.
+
+Step 2: SEO Analysis Logic
+Perform these three specific checks. If a URL has one of these issues, log the data in the specific JSON object and count the URL as "Crawled."
+1. Multiple H1 (Quantity Check)
+  - Criteria: Any page containing multiple <h1> tags or multiple H1 content.
+  - Data to Extract: URL, total count, and the inner text of every H1 found.
+2. Duplicate H1 (Content Check)
+  - Criteria: A single page where the exact same text string of <h1> tag is used in two or more different heading tags i.e . <h1>, <h2>, <h3>, <h4>, <h5> or <h6>.
+  - Data to Extract: The duplicated text, the URL, and how many times that specific string repeated.
+3. Missing ALT parameter or text on <img> tags (Attribute Check)
+- Criteria: <img> tags where:
+  - The alt attribute is missing entirely.
+  - The alt attribute is empty (alt="").
+  - The alt value is missing entirely.
+  - The alt text is a placeholder (e.g., "image", "photo", "img", "screenshot", "picture").
+- Exclusion: Ignore SVGs, base64 strings, and 1x1 tracking pixels.
+- Data to Extract: Page URL, the image src URL, and the current faulty ALT value.
+
+Final Report Requirements
+You must return the output strictly in JSON format. Ensure that URLs with SEO issues are not included in the failed_or_skipped_urls list.
+
+Output Schema:
+{
+  "extracted_urls_from_sitemaps": [],
+  "duplicate_h1": [
+    {
+      "h1_text": ["The repeated string"],
+      "url": "https://example.com/page",
+      "occurrences": 2
+    }
+  ],
+  "multiple_h1": [
+    {
+      "url": "https://example.com/page",
+      "total_h1_tags": 3,
+      "h1_contents": ["Heading 1", "Heading 2", "Heading 3"]
+    }
+  ],
+  "missing_alt_text_images": [
+    {
+      "page_url": "https://example.com/page",
+      "image_src": "https://example.com/img.jpg",
+      "alt_text_found": ""
+    }
+  ],
+  "failed_or_skipped_urls": [
+    "List only URLs that could not be reached or timed out"
+  ],
+  "summary_statistics": {
+    "total_urls_discovered_in_sitemap": 0,
+    "total_urls_successfully_crawled": 0,
+    "total_duplicate_h1_issues": 0,
+    "total_multiple_h1_issues": 0,
+    "total_missing_alt_issues": 0,
+    "total_failed_critical_errors": 0
+  }
+}
+
+--- SITEMAP XML CONTENT BELOW ---
+{$xmlContents}
+PROMPT;
+
+        $payload = [
+            'contents' => [
+                [
+                    'role'  => 'user',
+                    'parts' => [['text' => $prompt]],
+                ],
+            ],
+            'generationConfig' => [
+                'responseMimeType' => 'application/json',
+            ],
+        ];
+
+        $response = Http::timeout(300)
+            ->retry(3, 2000)
+            ->withHeaders([
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $accessToken,
+            ])
+            ->post($endpoint, $payload);
+
+        if (!$response->successful()) {
+            throw new Exception('Gemini API error: ' . $response->body());
+        }
+
+        $data = $response->json();
+
+        if (isset($data['error'])) {
+            throw new Exception('Gemini API error: ' . ($data['error']['message'] ?? 'Unknown'));
+        }
+
+        $raw = $data['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
+
+        // Strip any accidental markdown code fences
+        $raw = preg_replace('/^```json\s*/i', '', trim($raw));
+        $raw = preg_replace('/\s*```$/', '', $raw);
+
+        return $raw;
+    }
+
+    /**
      * Build and return an authenticated Google API client using a service account.
      */
     private function getGoogleClient(): GoogleClient
@@ -1475,6 +1855,771 @@ private function getColumnLetter($index)
         $client->addScope(Drive::DRIVE);
 
         return $client;
+    }
+
+    public function seoDashboard(int $created_by_user_id, int $client_property_id)
+    {
+        // ── Resolve domain ────────────────────────────────────────────────────
+        $clientProperty = Client_propertiesModel::findOrFail($client_property_id);
+        $domain         = $clientProperty->domain ?? '';
+ 
+        // ── Raw ranking reports ───────────────────────────────────────────────
+        $savedRankingReports = RankingCompetitorReport::where('client_property_id', $client_property_id)
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($r) => [
+                'id'               => $r->id,
+                'label'            => \Carbon\Carbon::parse($r->created_at)->format('d M Y, h:i A'),
+                'location'         => $r->location,
+                'keywords'         => $r->keywords,
+                'client_domain'    => $r->client_domain,
+                'competitor_option'=> $r->competitor_option,
+                'results_json'     => $r->results_json,
+                'created_at'       => $r->created_at,
+            ]);
+
+    
+        // ── Saved Core Web Vitals (same query as coreWebVitals()) ──────────────
+        $savedCoreWebVitals = CoreWebVital::where('client_property_id', $client_property_id)
+            ->orderByDesc('created_at')
+            ->get();
+    
+        $groupedUrls = [];
+ 
+        $normalise = function (string $url): string {
+            $url = trim($url);
+            // Ensure scheme so parse_url works
+            if (!preg_match('#^https?://#i', $url)) {
+                $url = 'https://' . $url;
+            }
+            $parts = parse_url($url);
+            $host  = strtolower($parts['host'] ?? '');
+            $host  = preg_replace('/^www\./', '', $host);
+            $path  = rtrim($parts['path'] ?? '', '/');
+            return $host . $path;
+        };
+ 
+        foreach ($savedRankingReports as $r) {
+            $raw = $r['client_domain'] ?? '';
+            if (!$raw) continue;
+            $key = $normalise($raw);
+            if (!isset($groupedUrls[$key])) {
+                $groupedUrls[$key] = [
+                    'display_url' => $r['client_domain'],
+                    'ranking'     => [],
+                    'cwv'         => [],
+                    'latest_at'   => $r['created_at'],
+                ];
+            }
+            $groupedUrls[$key]['ranking'][] = $r;
+            // Keep the most recent date for row ordering
+            if ($r['created_at'] > $groupedUrls[$key]['latest_at']) {
+                $groupedUrls[$key]['latest_at'] = $r['created_at'];
+            }
+        }
+ 
+        foreach ($savedCoreWebVitals as $c) {
+            $raw = $c->url ?? '';
+            if (!$raw) continue;
+            $key = $normalise($raw);
+            if (!isset($groupedUrls[$key])) {
+                $groupedUrls[$key] = [
+                    'display_url' => $c->url,
+                    'ranking'     => [],
+                    'cwv'         => [],
+                    'latest_at'   => $c->created_at,
+                ];
+            }
+            $groupedUrls[$key]['cwv'][] = $c->toArray();
+            if ($c->created_at > $groupedUrls[$key]['latest_at']) {
+                $groupedUrls[$key]['latest_at'] = $c->created_at;
+            }
+        }
+ 
+        // Sort groups newest-first
+        uasort($groupedUrls, fn ($a, $b) => $b['latest_at'] <=> $a['latest_at']);
+ 
+        return view('arihant.seo.seo-dashboard', compact(
+            'created_by_user_id',
+            'client_property_id',
+            'domain',
+            'savedRankingReports',
+            'savedCoreWebVitals',
+            'groupedUrls',          // ← new merged structure
+        ));
+    }
+
+    public function seoSummary(int $created_by_user_id, int $client_property_id, string $urlKey)
+    {
+        $urlKey = urldecode($urlKey);
+
+        $normalise = function (string $url): string {
+            $url = trim($url);
+            if (!preg_match('#^https?://#i', $url)) $url = 'https://' . $url;
+            $parts = parse_url($url);
+            $host  = preg_replace('/^www\./', '', strtolower($parts['host'] ?? ''));
+            return $host . rtrim($parts['path'] ?? '', '/');
+        };
+
+        $allRanking = RankingCompetitorReport::where('client_property_id', $client_property_id)
+            ->orderByDesc('created_at')->get()
+            ->filter(fn($r) => $normalise($r->client_domain ?? '') === $urlKey)
+            ->map(fn($r) => [
+                'id'               => $r->id,
+                'location'         => $r->location,
+                'keywords'         => $r->keywords,
+                'client_domain'    => $r->client_domain,
+                'competitor_option'=> $r->competitor_option,
+                'results_json'     => $r->results_json,
+                'created_at'       => $r->created_at,
+            ])->values();
+
+        $allCwv = CoreWebVital::where('client_property_id', $client_property_id)
+            ->orderByDesc('created_at')->get()
+            ->filter(fn($c) => $normalise($c->url ?? '') === $urlKey)
+            ->map(fn($c) => $c->toArray())->values();
+
+        $group = [
+            'display_url' => $allRanking->first()['client_domain']
+                        ?? $allCwv->first()['url']
+                        ?? $urlKey,
+            'ranking' => $allRanking->toArray(),
+            'cwv'     => $allCwv->toArray(),
+        ];
+
+        return view('arihant.seo.seo-summary', compact(
+            'created_by_user_id', 'client_property_id', 'urlKey', 'group'
+        ));
+    }
+
+    public function seopdfSummary(int $created_by_user_id, int $client_property_id, string $urlKey)
+    {
+        $urlKey = urldecode($urlKey);
+
+        $normalise = function (string $url): string {
+            $url = trim($url);
+            if (!preg_match('#^https?://#i', $url)) $url = 'https://' . $url;
+            $parts = parse_url($url);
+            $host  = preg_replace('/^www\./', '', strtolower($parts['host'] ?? ''));
+            return $host . rtrim($parts['path'] ?? '', '/');
+        };
+
+        $allRanking = RankingCompetitorReport::where('client_property_id', $client_property_id)
+            ->orderByDesc('created_at')->get()
+            ->filter(fn($r) => $normalise($r->client_domain ?? '') === $urlKey)
+            ->map(fn($r) => [
+                'id'               => $r->id,
+                'location'         => $r->location,
+                'keywords'         => $r->keywords,
+                'client_domain'    => $r->client_domain,
+                'competitor_option'=> $r->competitor_option,
+                'results_json'     => $r->results_json,
+                'created_at'       => $r->created_at,
+            ])->values();
+
+        $allCwv = CoreWebVital::where('client_property_id', $client_property_id)
+            ->orderByDesc('created_at')->get()
+            ->filter(fn($c) => $normalise($c->url ?? '') === $urlKey)
+            ->map(fn($c) => $c->toArray())->values();
+
+        $group = [
+            'display_url' => $allRanking->first()['client_domain']
+                        ?? $allCwv->first()['url']
+                        ?? $urlKey,
+            'ranking' => $allRanking->toArray(),
+            'cwv'     => $allCwv->toArray(),
+        ];
+
+        return view('arihant.seo.seo-pdf-summary', compact(
+            'created_by_user_id', 'client_property_id', 'urlKey', 'group'
+        ));
+    }
+
+    // ============================================================
+    //  ADD THIS METHOD TO: SEOAutomationController
+    //  Also add this route in web.php or api.php:
+    //
+    //  Route::post('/seo/broken-links', [SEOAutomationController::class, 'checkBrokenLinks']);
+    //
+    //  The request body (JSON or form) should contain:
+    //    { "domain": "https://example.com" }
+    // ============================================================
+
+    /**
+     * Check for broken links on a given domain.
+     *
+     * Strategy:
+     *   1. Normalise & validate the domain.
+     *   2. Fetch the homepage HTML (no external API key needed).
+     *   3. Extract every unique <a href="…"> link.
+     *   4. HEAD-request each link and record its HTTP status.
+     *   5. Classify results: broken (4xx/5xx/timeout), redirected (3xx), ok (2xx).
+     *
+     * Completely free — no third-party API key required.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function checkBrokenLinks(string $domain)
+    {
+        // ── 1. Validate input ────────────────────────────────────────────────────
+        $rawDomain = trim($domain);
+
+        // Ensure scheme is present so parse_url works correctly
+        if (!preg_match('#^https?://#i', $rawDomain)) {
+            $rawDomain = 'https://' . $rawDomain;
+        }
+
+        $parsed = parse_url($rawDomain);
+        if (empty($parsed['host'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid domain provided.',
+            ], 422);
+        }
+
+        // Canonical base URL (scheme + host, no trailing slash)
+        $baseUrl = rtrim(($parsed['scheme'] ?? 'https') . '://' . $parsed['host'], '/');
+
+        // ── 2. Fetch homepage HTML ───────────────────────────────────────────────
+        try {
+            $homepageResponse = Http::timeout(20)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (compatible; BrokenLinkChecker/1.0)',
+                ])
+                ->get($baseUrl);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not reach the domain: ' . $e->getMessage(),
+            ], 502);
+        }
+
+        if ($homepageResponse->failed()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Domain returned HTTP ' . $homepageResponse->status() . '. Cannot crawl.',
+            ], 502);
+        }
+
+        $html = $homepageResponse->body();
+
+        // ── 3. Extract all <a href="…"> links ───────────────────────────────────
+        $links = $this->extractLinks($html, $baseUrl);
+
+        if (empty($links)) {
+            return response()->json([
+                'success'      => true,
+                'domain'       => $baseUrl,
+                'total_links'  => 0,
+                'broken_count' => 0,
+                'message'      => 'No links found on the homepage.',
+                'results'      => [],
+            ]);
+        }
+
+        // ── 4. HEAD-check each link ──────────────────────────────────────────────
+        $results      = [];
+        $brokenCount  = 0;
+        $okCount      = 0;
+        $redirectCount= 0;
+
+        foreach ($links as $url) {
+            $checked = $this->checkSingleLink($url);
+
+            // Classify status
+            $statusCode = $checked['status_code'];
+            if ($statusCode === 0 || $statusCode >= 400) {
+                $checked['status_label'] = 'broken';
+                $brokenCount++;
+            } elseif ($statusCode >= 300) {
+                $checked['status_label'] = 'redirect';
+                $redirectCount++;
+            } else {
+                $checked['status_label'] = 'ok';
+                $okCount++;
+            }
+
+            $results[] = $checked;
+        }
+
+        // ── 5. Sort: broken first, then redirects, then ok ───────────────────────
+        usort($results, function ($a, $b) {
+            $order = ['broken' => 0, 'redirect' => 1, 'ok' => 2];
+            return ($order[$a['status_label']] ?? 3) <=> ($order[$b['status_label']] ?? 3);
+        });
+
+        // ── 6. Return structured response ────────────────────────────────────────
+        return response()->json([
+            'success'        => true,
+            'domain'         => $baseUrl,
+            'total_links'    => count($links),
+            'broken_count'   => $brokenCount,
+            'redirect_count' => $redirectCount,
+            'ok_count'       => $okCount,
+            'results'        => $results,
+        ]);
+    }
+
+    // ============================================================
+    //  PRIVATE HELPERS  (add these as private methods in the class)
+    // ============================================================
+
+    /**
+     * Extract unique, absolute links from an HTML string.
+     *
+     * - Resolves relative URLs against $baseUrl.
+     * - Strips fragment-only (#anchor) and mailto:/tel: links.
+     * - Deduplicates the list.
+     *
+     * @param  string  $html
+     * @param  string  $baseUrl  e.g. "https://example.com"
+     * @return array<string>
+     */
+    private function extractLinks(string $html, string $baseUrl): array
+    {
+        $links = [];
+
+        // Match all href attributes
+        preg_match_all('/<a\s[^>]*href=["\']([^"\'#][^"\']*)["\'][^>]*>/i', $html, $matches);
+
+        foreach ($matches[1] ?? [] as $href) {
+            $href = trim($href);
+
+            // Skip non-http schemes
+            if (preg_match('#^(mailto:|tel:|javascript:|data:)#i', $href)) {
+                continue;
+            }
+
+            // Resolve relative URLs
+            if (!preg_match('#^https?://#i', $href)) {
+                $href = $href[0] === '/'
+                    ? $baseUrl . $href
+                    : $baseUrl . '/' . $href;
+            }
+
+            // Remove query & fragment for deduplication
+            $cleanUrl = strtok($href, '#');
+            if ($cleanUrl) {
+                $links[] = $cleanUrl;
+            }
+        }
+
+        // Deduplicate while preserving order
+        return array_values(array_unique($links));
+    }
+
+    /**
+     * Perform a HEAD request on a single URL and return its status info.
+     *
+     * Falls back to GET if the server doesn't support HEAD.
+     *
+     * @param  string  $url
+     * @return array{url: string, status_code: int, status_text: string, response_time_ms: int}
+     */
+    private function checkSingleLink(string $url): array
+    {
+        $start = microtime(true);
+
+        try {
+            // Try HEAD first (faster, no body download)
+            $response = Http::timeout(10)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (compatible; BrokenLinkChecker/1.0)',
+                ])
+                ->head($url);
+
+            $statusCode = $response->status();
+
+            // Some servers return 405 Method Not Allowed for HEAD → retry with GET
+            if ($statusCode === 405) {
+                $response   = Http::timeout(10)->withOptions(['stream' => true])->get($url);
+                $statusCode = $response->status();
+            }
+
+            $statusText = $this->httpStatusText($statusCode);
+
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            $statusCode = 0;
+            $statusText = 'Connection failed: ' . $e->getMessage();
+        } catch (\Exception $e) {
+            $statusCode = 0;
+            $statusText = 'Error: ' . $e->getMessage();
+        }
+
+        $elapsed = (int) round((microtime(true) - $start) * 1000);
+
+        return [
+            'url'              => $url,
+            'status_code'      => $statusCode,
+            'status_text'      => $statusText,
+            'response_time_ms' => $elapsed,
+        ];
+    }
+
+    /**
+     * Map an HTTP status code to its standard reason phrase.
+     *
+     * @param  int  $code
+     * @return string
+     */
+    private function httpStatusText(int $code): string
+    {
+        $phrases = [
+            0   => 'Unreachable / Timeout',
+            200 => 'OK',
+            201 => 'Created',
+            204 => 'No Content',
+            301 => 'Moved Permanently',
+            302 => 'Found (Redirect)',
+            304 => 'Not Modified',
+            307 => 'Temporary Redirect',
+            308 => 'Permanent Redirect',
+            400 => 'Bad Request',
+            401 => 'Unauthorized',
+            403 => 'Forbidden',
+            404 => 'Not Found',
+            405 => 'Method Not Allowed',
+            408 => 'Request Timeout',
+            410 => 'Gone',
+            429 => 'Too Many Requests',
+            500 => 'Internal Server Error',
+            502 => 'Bad Gateway',
+            503 => 'Service Unavailable',
+            504 => 'Gateway Timeout',
+        ];
+
+        return $phrases[$code] ?? 'HTTP ' . $code;
+    }
+
+    // ============================================================
+    //  ADD THIS METHOD INSIDE SEOAutomationController
+    //  Place it after coreWebVitalsform() (around line 214)
+    // ============================================================
+
+    /**
+    * Website Health & Site Audit
+    *
+    * Accepts a domain (or full URL) and runs two audits in parallel:
+    *   1. Mozilla HTTP Observatory  – security headers, TLS, HTTPS, CSP, etc.
+    *   2. Google PageSpeed Insights – Core Web Vitals + Lighthouse for mobile & desktop
+    *
+    * Route example (add to web.php / api.php):
+    *   Route::post('/website-health-audit', [SEOAutomationController::class, 'websiteHealthAudit']);
+    *
+    * Request body (JSON or form):
+    *   { "domain": "https://example.com" }   — full URL  or just  "example.com"
+    *
+    * @param  \Illuminate\Http\Request  $request
+    * @return \Illuminate\Http\JsonResponse
+    */
+    public function websiteHealthAudit(string $domain): \Illuminate\Http\JsonResponse
+    {
+        $rawDomain = trim($domain);
+
+        // Ensure scheme is present so parse_url works correctly
+        if (!preg_match('#^https?://#i', $rawDomain)) {
+            $rawDomain = 'https://' . $rawDomain;
+        }
+
+        // Normalise: strip scheme + trailing slash to get bare hostname for Observatory
+        $host = preg_replace('#^https?://#i', '', $rawDomain);
+        $host = rtrim($host, '/');
+        // Strip any path — Observatory only accepts a hostname
+        $host = explode('/', $host)[0];
+
+        // Full URL for PageSpeed (must have scheme)
+        $siteUrl = 'https://' . $host;
+
+        // ── 2. Mozilla HTTP Observatory ─────────────────────────────────────────
+        $observatoryData = $this->runMozillaObservatoryScan($host);
+
+        // ── 3. Google PageSpeed Insights (mobile + desktop, all categories) ─────
+        $pageSpeedData = $this->runPageSpeedInsights($siteUrl);
+
+        // ── 4. Build & return unified response ──────────────────────────────────
+        // return view(
+        //     'arihant.seo.ranking_competitor_report',
+        //     compact('created_by_user_id', 'client_property_id', 'domain', 'savedReports')
+        // );
+        return response()->json([
+            'success'  => true,
+            'domain'   => $host,
+            'site_url' => $siteUrl,
+            'audits'   => [
+                'mozilla_observatory' => $observatoryData,
+                'pagespeed_insights'  => $pageSpeedData,
+            ],
+            'generated_at' => now()->toIso8601String(),
+        ]);
+    }
+
+
+    // ============================================================
+    //  PRIVATE HELPERS — add these as private methods in the class
+    // ============================================================
+
+    /**
+    * Run a Mozilla HTTP Observatory scan and return structured results.
+    *
+    * Flow:
+    *   POST  /analyze?host={host}              → triggers scan, returns scan meta
+    *   GET   /analyze?host={host}              → poll until state === FINISHED
+    *   GET   /getScanResults?scan={scan_id}    → per-test breakdown
+    *
+    * Docs: https://developer.mozilla.org/en-US/observatory/docs/api/
+    *
+    * @param  string  $host  bare hostname, e.g. "example.com"
+    * @return array
+    */
+    private function runMozillaObservatoryScan(string $host): array
+    {
+        $baseUrl   = 'https://observatory-api.mdn.mozilla.net/api/v2/analyze?host=';
+        $maxPolls  = 10;      // maximum polling attempts
+        $pollDelay = 3;       // seconds between polls
+
+        try {
+            // ── Step 1: Trigger a fresh scan ────────────────────────────────────
+            $triggerResponse = Http::timeout(60)
+            ->get("{$baseUrl}{$host}");
+            
+
+            if ($triggerResponse->failed()) {
+                return [
+                    'error'   => true,
+                    'message' => 'Observatory trigger failed: HTTP ' . $triggerResponse->status(),
+                    'body'    => $triggerResponse->body(),
+                ];
+            }
+
+            $scanMeta = $triggerResponse->json();
+            // dd($triggerResponse->body());
+
+
+            // ── Step 2: Poll until scan state is FINISHED ───────────────────────
+            $attempt  = 0;
+            $scanData = $scanMeta['scan'] ?? [];
+
+            // ── Step 3: Fetch per-test details ──────────────────────────────────
+            $scanId       = $scanData['id'] ?? null;
+            $testResults  = [];
+
+            if ($scanId) {
+                // $testResponse = Http::timeout(30)->get("{$baseUrl}/getScanResults?scan={$scanId}");
+                $rawTests = $scanMeta['tests'] ?? [];
+
+                    // Structure each test result clearly
+                    foreach ($rawTests as $testName => $test) {
+                        $testResults[$testName] = [
+                            'pass'        => $test['pass']        ?? null,
+                            'score_modifier' => $test['score_modifier'] ?? null,
+                            'result'      => $test['result']      ?? null,
+                            'description' => $test['score_description'] ?? ($test['description'] ?? null),
+                            'data'        => $test['output'] ?? ($test['data'] ?? null),
+                        ];
+                    }
+            }
+
+            // ── Step 4: Build summary ────────────────────────────────────────────
+            return [
+                'error'       => false,
+                'scan_id'     => $scanData['id']        ?? null,
+                'grade'       => $scanData['grade']          ?? null,
+                'score'       => $scanData['score']          ?? null,
+                'score_description' => $scanData['score_description'] ?? null,
+                'state'       => $scanData['state']          ?? null,
+                'tests_passed'  => $scanData['tests_passed']  ?? null,
+                'tests_failed'  => $scanData['tests_failed']  ?? null,
+                'tests_quantity'=> $scanData['tests_quantity'] ?? null,
+                'likelihood_indicator' => $scanData['likelihood_indicator'] ?? null,
+                'response_headers' => $scanData['response_headers'] ?? null,
+                'scanned_at'  => $scanData['scanned_at']       ?? null,
+                'algorithm_version' => $scanData['algorithm_version'] ?? null,
+                'tests'       => $testResults,
+            ];
+
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            return [
+                'error'   => true,
+                'message' => 'Observatory connection error: ' . $e->getMessage(),
+            ];
+        } catch (\Exception $e) {
+            return [
+                'error'   => true,
+                'message' => 'Observatory unexpected error: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+
+    /**
+    * Run Google PageSpeed Insights for both mobile & desktop.
+    *
+    * Fetches: performance, accessibility, best-practices, seo
+    * Returns all Lighthouse audit details plus category scores.
+    *
+    * Docs: https://developers.google.com/speed/docs/insights/v5/get-started
+    *
+    * @param  string  $url  full URL with scheme, e.g. "https://example.com"
+    * @return array
+    */
+    private function runPageSpeedInsights(string $url): array
+    {
+        $apiKey    = env('PAGESPEED_API_KEY');
+        $results   = [];
+        $categories = ['performance', 'accessibility', 'best-practices', 'seo'];
+
+        foreach (['mobile', 'desktop'] as $strategy) {
+            $queryParams = [
+                'url'      => $url,
+                'key'      => $apiKey,
+                'strategy' => $strategy,
+            ];
+
+            // Manually append categories (important)
+            $queryString = http_build_query($queryParams);
+
+            foreach ($categories as $category) {
+                $queryString .= '&category=' . urlencode($category);
+            }
+
+            $apiUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed?' . $queryString;
+            // dd($apiUrl);
+            try {
+                $response = Http::timeout(120)->get($apiUrl);
+            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                $results[$strategy] = [
+                    'error'   => true,
+                    'message' => 'PageSpeed connection error: ' . $e->getMessage(),
+                ];
+                continue;
+            }
+
+            if ($response->failed()) {
+                $results[$strategy] = [
+                    'error'   => true,
+                    'message' => 'PageSpeed API failed for ' . $strategy . ': HTTP ' . $response->status(),
+                    'body'    => $response->json(),
+                ];
+                continue;
+            }
+
+            $data       = $response->json();
+            $lhr        = $data['lighthouseResult']   ?? [];
+            $loadingExp = $data['loadingExperience']  ?? [];
+            $audits     = $lhr['audits']              ?? [];
+            $categories = $lhr['categories']          ?? [];
+
+            // Helper closure: extract a single audit's key fields
+            $audit = fn(string $key) => [
+                'title'        => $audits[$key]['title']        ?? null,
+                'description'  => $audits[$key]['description']  ?? null,
+                'display_value'=> $audits[$key]['displayValue'] ?? '—',
+                'numeric_value'=> $audits[$key]['numericValue'] ?? null,
+                'score'        => $audits[$key]['score']        ?? null,
+                'score_display_mode' => $audits[$key]['scoreDisplayMode'] ?? null,
+            ];
+
+            // ── Category Scores ──────────────────────────────────────────────────
+            $categoryScores = [];
+            foreach (['performance', 'accessibility', 'best-practices', 'seo'] as $cat) {
+                $catData = $categories[$cat] ?? [];
+                $categoryScores[$cat] = [
+                    'title' => $catData['title'] ?? $cat,
+                    'score' => isset($catData['score']) ? (int) round($catData['score'] * 100) : null,
+                    'description' => $catData['description'] ?? null,
+                ];
+            }
+
+            // ── Core Web Vitals (Lab Data) ───────────────────────────────────────
+            $coreWebVitals = [
+                'first_contentful_paint'    => $audit('first-contentful-paint'),
+                'largest_contentful_paint'  => $audit('largest-contentful-paint'),
+                'total_blocking_time'       => $audit('total-blocking-time'),
+                'cumulative_layout_shift'   => $audit('cumulative-layout-shift'),
+                'speed_index'               => $audit('speed-index'),
+                'time_to_interactive'       => $audit('interactive'),
+                'time_to_first_byte'        => $audit('server-response-time'),
+                'interaction_to_next_paint' => $audit('interaction-to-next-paint'),
+            ];
+
+            // ── Diagnostics & Opportunity Audits ────────────────────────────────
+            $diagnostics  = [];
+            $opportunities= [];
+
+            foreach ($audits as $auditKey => $auditItem) {
+                // Skip already-captured CWV metrics
+                if (in_array($auditKey, [
+                    'first-contentful-paint', 'largest-contentful-paint',
+                    'total-blocking-time', 'cumulative-layout-shift',
+                    'speed-index', 'interactive', 'server-response-time',
+                    'interaction-to-next-paint',
+                ])) {
+                    continue;
+                }
+
+                $mode  = $auditItem['scoreDisplayMode'] ?? '';
+                $score = $auditItem['score'] ?? null;
+
+                $entry = [
+                    'title'         => $auditItem['title']        ?? null,
+                    'description'   => $auditItem['description']  ?? null,
+                    'display_value' => $auditItem['displayValue'] ?? null,
+                    'score'         => $score,
+                    'score_display_mode' => $mode,
+                    'details_type'  => $auditItem['details']['type'] ?? null,
+                    'items'         => $auditItem['details']['items'] ?? null,
+                ];
+
+                if ($mode === 'opportunity') {
+                    $entry['savings_ms'] = $auditItem['details']['overallSavingsMs'] ?? null;
+                    $opportunities[$auditKey] = $entry;
+                } elseif (!in_array($mode, ['notApplicable', 'manual'])) {
+                    $diagnostics[$auditKey] = $entry;
+                }
+            }
+
+            // ── Field Data (CrUX — real-user data if available) ─────────────────
+            $fieldData = [];
+            if (!empty($loadingExp['metrics'])) {
+                foreach ($loadingExp['metrics'] as $metricKey => $metricVal) {
+                    $fieldData[$metricKey] = [
+                        'category'     => $metricVal['category']      ?? null,
+                        'percentile'   => $metricVal['percentile']    ?? null,
+                        'distributions'=> $metricVal['distributions'] ?? null,
+                    ];
+                }
+            }
+
+            // ── Lighthouse Meta ──────────────────────────────────────────────────
+            $meta = [
+                'lighthouse_version'  => $lhr['lighthouseVersion']  ?? null,
+                'fetch_time'          => $lhr['fetchTime']          ?? null,
+                'requested_url'       => $lhr['requestedUrl']       ?? $url,
+                'final_url'           => $lhr['finalUrl']           ?? null,
+                'user_agent'          => $lhr['userAgent']          ?? null,
+                'environment'         => $lhr['environment']        ?? null,
+                'stack_packs'         => array_map(
+                    fn($sp) => ['id' => $sp['id'] ?? null, 'title' => $sp['title'] ?? null],
+                    $lhr['stackPacks'] ?? []
+                ),
+            ];
+
+            $results[$strategy] = [
+                'error'          => false,
+                'meta'           => $meta,
+                'category_scores'=> $categoryScores,
+                'core_web_vitals'=> $coreWebVitals,
+                'opportunities'  => $opportunities,
+                'diagnostics'    => $diagnostics,
+                'field_data_crux'=> $fieldData,
+            ];
+
+            // Reset for next iteration (variable was reused)
+            $categories = ['performance', 'accessibility', 'best-practices', 'seo'];
+        }
+
+        return $results;
     }
 
     public function create() {}

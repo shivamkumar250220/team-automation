@@ -49,20 +49,25 @@
                                                             
                                                             @if(in_array(Auth::user()->role->name, ['Admin']) || Auth::user()->team_id == 1)
                                                                 <li class="dropdown-item">
-                                                                    <a href="{{url('ranking-competitor-report/'.$client->id.'/'.$client->user_id)}}" class="btn btn-link nav-link" style="text-align:left; padding:0; border:none; background:none;">
+                                                                    <a href="{{url('ranking-competitor-report/'.$client->user_id.'/'.$client->id)}}" class="btn btn-link nav-link" style="text-align:left; padding:0; border:none; background:none;">
                                                                         <i class="mdi_icon mdi mdi-pencil-box-multiple text-muted"></i> Ranking-Competitor Report
                                                                     </a> 
                                                                 </li>
                                                                 <li class="dropdown-item">
-                                                                    <a href="{{url('core-web-vitals/'.$client->id.'/'.$client->user_id)}}" class="btn btn-link nav-link" style="text-align:left; padding:0; border:none; background:none;">
+                                                                    <a href="{{url('core-web-vitals/'.$client->user_id.'/'.$client->id)}}" class="btn btn-link nav-link" style="text-align:left; padding:0; border:none; background:none;">
                                                                         <i class="mdi_icon mdi mdi-delete-circle-outline text-muted"></i> Core Web Vitals
                                                                     </a>
                                                                 </li>
                                                                 
                                                                 <li><hr class="dropdown-divider"></li>
                                                                 <li>
-                                                                    <a class="dropdown-item text-success" href="{{url('reporting-sheet/'.$client->id.'/'.$client->user_id)}}">
+                                                                    <a class="dropdown-item text-success" href="{{url('reporting-sheet/'.$client->user_id.'/'.$client->id)}}">
                                                                         Reporting Sheet
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a class="dropdown-item text-success" href="{{url('seo-dashboard/'.$client->user_id.'/'.$client->id)}}">
+                                                                        SEO Dashboard
                                                                     </a>
                                                                 </li>
                                                             @endif

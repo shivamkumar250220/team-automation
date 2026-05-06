@@ -65,6 +65,25 @@ Route::middleware(['auth', 'session.valid'])->group(function () {
         Route::get('/reporting-sheet/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'reportingSheet'])->name('reporting.sheet');
         Route::post('/reporting-sheet/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'reportingSheetForm'])->name('reporting.sheet.form');
         // web.php or api.php — REMOVE after debugging
+        Route::get('/seo-dashboard/{created_by_user_id}/{cpid}', [SEOAutomationController::class, 'seoDashboard'])->name('seo.dashboard');
+        Route::get('/seo-summary/{created_by_user_id}/{cpid}/{urlKey}', [SEOAutomationController::class, 'seoSummary'])->name('seo.summary')->where('urlKey', '[^/]+');
+        Route::get('/seo-pdf-summary/{created_by_user_id}/{cpid}/{urlKey}', [SEOAutomationController::class, 'seopdfSummary'])->name('seo.pdf.summary')->where('urlKey', '[^/]+');
+
+        
         Route::get('/debug-permissions', [SEOAutomationController::class, 'cleanupServiceAccountDrive']);
     });
+        
 });
+Route::get('/seo-broken-links/{domain}', [SEOAutomationController::class, 'checkBrokenLinks'])->name('broken.links')->where('domain', '[^/]+');
+
+Route::get('/website-health-audit/{domain}', [SEOAutomationController::class, 'websiteHealthAudit']);
+Route::get('/seo/{created_by_user_id}/{client_property_id}/website-health-audit',
+    [SEOAutomationController::class, 'websiteHealthAuditPage'])
+    ->name('seo.website-health-audit-page');
+
+// AJAX data endpoint (called by JS with the domain segment)
+Route::get('/seo/{created_by_user_id}/{client_property_id}/website-health-audit/{domain}',
+    [SEOAutomationController::class, 'websiteHealthAudit'])
+    ->name('seo.website-health-audit');
+
+Route::post('/audit-competitor', [SEOAutomationController::class, 'auditCompetitor']);
